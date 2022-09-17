@@ -1,7 +1,10 @@
 package test
 
 import (
+	"math/rand"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestInsertRaw(t *testing.T) {
@@ -16,28 +19,40 @@ func TestInsertRaw(t *testing.T) {
 	db := getDb(t)
 
 	// NOTE: Anonymous parameters only, passed by order
-	tx := db.Exec("INSERT INTO CUSTOMERS VALUES (customers_s.nextval,:1,:2,:3,:4,:5,:6)", customer_name, address, city, state, zip, age)
+	checkTxError(t,
+		db.Exec("INSERT INTO CUSTOMERS VALUES (customers_s.nextval,:1,:2,:3,:4,:5,:6)",
+			customer_name, address, city, state, zip, age))
 
-	err := tx.Error
-	if err != nil {
-		t.Errorf("tx.Error %s", err)
-	}
 }
 
 func TestInsertModel(t *testing.T) {
 	c := Customer{
-		CustomerName: "cname1112222",
-		Address:      "address2222",
-		City:         "city2222",
-		State:        "state2222",
-		ZipCode:      "zipcode",
-		Age:          324234,
+		CustomerName: uuid.New().String(),
+		Address:      uuid.New().String(),
+		City:         uuid.New().String(),
+		Age:          rand.Int31(),
 	}
 
 	db := getDb(t)
-	tx := db.Create(&c)
-	err := tx.Error
-	if err != nil {
-		t.Errorf("tx.Error %s", err)
-	}
+	checkTxError(t, db.Create(&c))
 }
+
+// not support yet
+// func TestInsertModels(t *testing.T) {
+// 	count := 10
+// 	cs := make([]Customer, count)
+// 	for i := 0; i < count; i++ {
+// 		cs[i] = Customer{
+// 			CustomerName: uuid.New().String(),
+// 			Address:      uuid.New().String(),
+// 			City:         uuid.New().String(),
+// 			Age:          rand.Int31(),
+// 		}
+// 	}
+
+// 	db := getDb(t)
+// 	tx := checkTxError(t, db.Create(&cs))
+// 	if tx.RowsAffected != int64(count) {
+// 		t.Errorf("batch insert affected %d rows, %d expected", tx.RowsAffected, count)
+// 	}
+// }

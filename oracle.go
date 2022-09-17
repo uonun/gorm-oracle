@@ -14,6 +14,7 @@ import (
 	"gorm.io/gorm/logger"
 	"gorm.io/gorm/migrator"
 	"gorm.io/gorm/schema"
+	"gorm.io/gorm/utils"
 )
 
 /*
@@ -162,6 +163,17 @@ func (dialector Dialector) DataTypeOf(field *schema.Field) string {
 	}
 }
 
+func (dialector Dialector) SavePoint(tx *gorm.DB, name string) error {
+	// TODO: validate the parameter
+	tx.Exec(fmt.Sprintf("SAVEPOINT %s", name))
+	return tx.Error
+}
+
+func (dialector Dialector) RollbackTo(tx *gorm.DB, name string) error {
+	tx.Exec(fmt.Sprintf("ROLLBACK TO SAVEPOINT %s", name))
+	return tx.Error
+}
+
 const (
 	// ClauseOnConflict for clause.ClauseBuilder ON CONFLICT key
 	ClauseOnConflict = "ON CONFLICT"
@@ -250,15 +262,22 @@ func (dialector Dialector) DefaultValueOf(field *schema.Field) clause.Expression
 }
 
 func (dialector Dialector) BindVarTo(writer clause.Writer, stmt *gorm.Statement, v interface{}) {
-	idx := stmt.Context.Value("sequence_column_idx").(int)
-	if idx >= len(stmt.Schema.Fields) {
+
+	isInsert := utils.Contains(stmt.BuildClauses, "INSERT")
+	if !isInsert {
+		writer.WriteString(fmt.Sprintf(":p%d", len(stmt.Vars)))
 		return
 	}
+
+	idx := stmt.Context.Value("sequence_column_idx").(int)
 	field := stmt.Schema.Fields[idx]
 
 	if seqName, isSeq := field.TagSettings["SEQUENCE"]; isSeq {
 		writer.WriteString(fmt.Sprintf("%s.nextval", seqName))
-		stmt.Vars = stmt.Vars[0:idx]
+
+		// use the "nextval" as value, so remove current value by index, use one less parameter
+		stmt.Vars = append(stmt.Vars[:idx], stmt.Vars[idx+1:]...)
+
 	} else {
 		writer.WriteString(fmt.Sprintf(":p%d", len(stmt.Vars)))
 	}
