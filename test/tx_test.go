@@ -21,6 +21,9 @@ func TestTxInsertRaw(t *testing.T) {
 	var vals2 = []interface{}{customer_name2, address, city, state, zip, age}
 
 	db := getDb(t).Begin()
+	defer func() {
+		db.Rollback()
+	}()
 
 	// insert customer_name1
 	checkTxError(t, db.Exec(sql, vals1...))
@@ -34,12 +37,12 @@ func TestTxInsertRaw(t *testing.T) {
 	var row1 Customer
 	row1ret := checkTxError(t, db.Where("CUSTOMER_NAME = ? ", customer_name1).Find(&row1))
 	if row1ret.RowsAffected != 1 || row1.CustomerName != customer_name1 {
-		t.Errorf("TestTxInsertRaw: can not query inserted row-customer_name1 in tx")
+		t.Fatalf("TestTxInsertRaw: can not query inserted row-customer_name1 in tx")
 	}
 	var row2 Customer
 	row2ret := checkTxError(t, db.Where("CUSTOMER_NAME = ? ", customer_name2).Find(&row2))
 	if row2ret.RowsAffected != 1 || row2.CustomerName != customer_name2 {
-		t.Errorf("TestTxInsertRaw: can not query inserted row-customer_name2 in tx")
+		t.Fatalf("TestTxInsertRaw: can not query inserted row-customer_name2 in tx")
 	}
 
 	// rollback
@@ -53,7 +56,7 @@ func TestTxInsertRaw(t *testing.T) {
 	// query again. must be 1 row only
 	newdbret := checkTxError(t, newdb.Where("CUSTOMER_NAME = ? or CUSTOMER_NAME = ? ", customer_name1, customer_name2).Find(&commitedRow))
 	if newdbret.RowsAffected != 1 || commitedRow.CustomerName != customer_name1 {
-		t.Errorf("TestTxInsertRaw: 2 row inserted after rollback")
+		t.Fatalf("TestTxInsertRaw: 2 row inserted after rollback")
 	}
 
 }
