@@ -43,3 +43,10 @@ func getDb(t *testing.T) *gorm.DB {
 
 	return db
 }
+
+func checkTxError(t *testing.T, tx *gorm.DB) *gorm.DB {
+	if tx.Error != nil {
+		t.Errorf("%s: tx.Error %s", t.Name(), tx.Error)
+	}
+	return tx
+}
