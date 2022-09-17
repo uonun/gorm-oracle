@@ -34,7 +34,9 @@ type Migrator struct {
 func (m Migrator) FullDataTypeOf(field *schema.Field) clause.Expr {
 	expr := m.Migrator.FullDataTypeOf(field)
 
+	// https://docs.oracle.com/cd/B19306_01/server.102/b14200/statements_4009.htm
 	if value, ok := field.TagSettings["COMMENT"]; ok {
+		panic("not implement")
 		expr.SQL += " COMMENT " + m.Dialector.Explain("?", value)
 	}
 
@@ -71,10 +73,12 @@ func (m Migrator) RenameColumn(value interface{}, oldName, newName string) error
 		}
 
 		if field != nil {
+			// Starting in Oracle 9i Release 2, you can now rename a column.
 			return m.DB.Exec(
-				"ALTER TABLE ? CHANGE ? ? ?",
-				clause.Table{Name: stmt.Table}, clause.Column{Name: oldName},
-				clause.Column{Name: newName}, m.FullDataTypeOf(field),
+				"ALTER TABLE ? RENAME COLUMN ? ?",
+				clause.Table{Name: stmt.Table},
+				clause.Column{Name: oldName},
+				clause.Column{Name: newName},
 			).Error
 		}
 
@@ -86,8 +90,8 @@ func (m Migrator) RenameIndex(value interface{}, oldName, newName string) error 
 	if !m.Dialector.DontSupportRenameIndex {
 		return m.RunWithValue(value, func(stmt *gorm.Statement) error {
 			return m.DB.Exec(
-				"ALTER TABLE ? RENAME INDEX ? TO ?",
-				clause.Table{Name: stmt.Table}, clause.Column{Name: oldName}, clause.Column{Name: newName},
+				"ALTER INDEX ? RENAME TO ?",
+				clause.Column{Name: oldName}, clause.Column{Name: newName},
 			).Error
 		})
 	}
@@ -107,11 +111,7 @@ func (m Migrator) RenameIndex(value interface{}, oldName, newName string) error 
 				if idx.Class != "" {
 					createIndexSQL += idx.Class + " "
 				}
-				createIndexSQL += "INDEX ? ON ??"
-
-				if idx.Type != "" {
-					createIndexSQL += " USING " + idx.Type
-				}
+				createIndexSQL += "INDEX ? ON ? ( ?? ) "
 
 				return m.DB.Exec(createIndexSQL, values...).Error
 			}
@@ -125,41 +125,37 @@ func (m Migrator) RenameIndex(value interface{}, oldName, newName string) error 
 func (m Migrator) DropTable(values ...interface{}) error {
 	values = m.ReorderModels(values, false)
 	return m.DB.Connection(func(tx *gorm.DB) error {
-		tx.Exec("SET FOREIGN_KEY_CHECKS = 0;")
 		for i := len(values) - 1; i >= 0; i-- {
 			if err := m.RunWithValue(values[i], func(stmt *gorm.Statement) error {
-				return tx.Exec("DROP TABLE IF EXISTS ? CASCADE", clause.Table{Name: stmt.Table}).Error
+				return tx.Exec("DROP TABLE ? PURGE", clause.Table{Name: stmt.Table}).Error
 			}); err != nil {
 				return err
 			}
 		}
-		return tx.Exec("SET FOREIGN_KEY_CHECKS = 1;").Error
+		return tx.Error
 	})
 }
 
 func (m Migrator) DropConstraint(value interface{}, name string) error {
 	return m.RunWithValue(value, func(stmt *gorm.Statement) error {
-		constraint, chk, table := m.GuessConstraintAndTable(stmt, name)
+		_, chk, _ := m.GuessConstraintAndTable(stmt, name)
 		if chk != nil {
-			return m.DB.Exec("ALTER TABLE ? DROP CHECK ?", clause.Table{Name: stmt.Table}, clause.Column{Name: chk.Name}).Error
-		}
-		if constraint != nil {
-			name = constraint.Name
+			return m.DB.Exec("ALTER TABLE ? DROP CONSTRAINT ?", clause.Table{Name: stmt.Table}, clause.Column{Name: chk.Name}).Error
 		}
 
-		return m.DB.Exec(
-			"ALTER TABLE ? DROP FOREIGN KEY ?", clause.Table{Name: table}, clause.Column{Name: name},
-		).Error
+		return m.DB.Error
 	})
 }
 
 // ColumnTypes column types return columnTypes,error
 func (m Migrator) ColumnTypes(value interface{}) ([]gorm.ColumnType, error) {
+	// https://docs.oracle.com/cd/E17952_01/mysql-8.0-en/information-schema-columns-table.html
+	// https://docs.oracle.com/en/database/oracle/oracle-database/18/refrn/DBA_TAB_COLS.html#GUID-857C32FD-AE30-4AB9-811B-AC3A7B91A04D
 	columnTypes := make([]gorm.ColumnType, 0)
 	err := m.RunWithValue(value, func(stmt *gorm.Statement) error {
 		var (
 			currentDatabase, table = m.CurrentSchema(stmt, stmt.Table)
-			columnTypeSQL          = "SELECT column_name, column_default, is_nullable = 'YES', data_type, character_maximum_length, column_type, column_key, extra, column_comment, numeric_precision, numeric_scale "
+			columnTypeSQL          = "SELECT c1.COLUMN_NAME,DATA_DEFAULT,NULLABLE,DATA_TYPE,DATA_LENGTH,CONCAT( DATA_TYPE,'('||DATA_LENGTH||')')  as column_type,'' as column_key,'' as extra,c2.comments,DATA_PRECISION,DATA_SCALE "
 			rows, err              = m.DB.Session(&gorm.Session{}).Table(table).Limit(1).Rows()
 		)
 
@@ -173,12 +169,9 @@ func (m Migrator) ColumnTypes(value interface{}) ([]gorm.ColumnType, error) {
 			return err
 		}
 
-		if !m.DisableDatetimePrecision {
-			columnTypeSQL += ", datetime_precision "
-		}
-		columnTypeSQL += "FROM information_schema.columns WHERE table_schema = ? AND table_name = ? ORDER BY ORDINAL_POSITION"
+		columnTypeSQL += "FROM all_tab_cols c1, all_col_comments c2 WHERE c1.table_name = ? and c1.OWNER = ? and c1.owner=c2.OWNER and c1.TABLE_NAME = c2.TABLE_NAME and c1.COLUMN_NAME=c2.COLUMN_NAME	 "
 
-		columns, rowErr := m.DB.Raw(columnTypeSQL, currentDatabase, table).Rows()
+		columns, rowErr := m.DB.Raw(columnTypeSQL, table, currentDatabase).Rows()
 		if rowErr != nil {
 			return rowErr
 		}
@@ -195,10 +188,6 @@ func (m Migrator) ColumnTypes(value interface{}) ([]gorm.ColumnType, error) {
 					&column.NameValue, &column.DefaultValueValue, &column.NullableValue, &column.DataTypeValue, &column.LengthValue, &column.ColumnTypeValue, &columnKey, &extraValue, &column.CommentValue, &column.DecimalSizeValue, &column.ScaleValue,
 				}
 			)
-
-			if !m.DisableDatetimePrecision {
-				values = append(values, &datetimePrecision)
-			}
 
 			if scanErr := columns.Scan(values...); scanErr != nil {
 				return scanErr
@@ -247,15 +236,19 @@ func (m Migrator) ColumnTypes(value interface{}) ([]gorm.ColumnType, error) {
 }
 
 func (m Migrator) CurrentDatabase() (name string) {
-	baseName := m.Migrator.CurrentDatabase()
-	m.DB.Raw(
-		"SELECT SCHEMA_NAME from Information_schema.SCHEMATA where SCHEMA_NAME LIKE ? ORDER BY SCHEMA_NAME=? DESC,SCHEMA_NAME limit 1",
-		baseName+"%", baseName).Scan(&name)
+	// https://docs.oracle.com/cd/B19306_01/server.102/b14200/functions165.htm
+	m.DB.Raw("SELECT SYS_CONTEXT('USERENV','CURRENT_SCHEMA') FROM DUAL").Row().Scan(&name)
+	return
+}
+
+// GetSchemaName returns current schema name
+func (m Migrator) GetSchemaName() (name string) {
+	m.DB.Raw("SELECT SYS_CONTEXT('USERENV','CURRENT_SCHEMA') FROM DUAL").Row().Scan(&name)
 	return
 }
 
 func (m Migrator) GetTables() (tableList []string, err error) {
-	err = m.DB.Raw("SELECT TABLE_NAME FROM information_schema.tables where TABLE_SCHEMA=?", m.CurrentDatabase()).
+	err = m.DB.Raw("SELECT TABLE_NAME FROM ALL_TABLES WHERE OWNER =?", m.GetSchemaName()).
 		Scan(&tableList).Error
 	return
 }
