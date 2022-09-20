@@ -1,7 +1,7 @@
 package test
 
 import (
-	"math/rand"
+	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
@@ -26,33 +26,23 @@ func TestInsertRaw(t *testing.T) {
 }
 
 func TestInsertModel(t *testing.T) {
-	c := Customer{
-		CustomerName: uuid.New().String(),
-		Address:      uuid.New().String(),
-		City:         uuid.New().String(),
-		Age:          rand.Int31(),
-	}
+	c := getRandomCustomer("TestInsertModel")
 
 	db := getDb(t)
 	checkTxError(t, db.Create(&c))
 }
 
-// not support yet
-// func TestInsertModels(t *testing.T) {
-// 	count := 10
-// 	cs := make([]Customer, count)
-// 	for i := 0; i < count; i++ {
-// 		cs[i] = Customer{
-// 			CustomerName: uuid.New().String(),
-// 			Address:      uuid.New().String(),
-// 			City:         uuid.New().String(),
-// 			Age:          rand.Int31(),
-// 		}
-// 	}
+func TestInsertModels(t *testing.T) {
+	count := 2
+	batchId := uuid.NewString()
+	cs := make([]Customer, count)
+	for i := 0; i < count; i++ {
+		cs[i] = getRandomCustomer(fmt.Sprintf("TestInsertModels:batch-%s:", batchId))
+	}
 
-// 	db := getDb(t)
-// 	tx := checkTxError(t, db.Create(&cs))
-// 	if tx.RowsAffected != int64(count) {
-// 		t.Errorf("batch insert affected %d rows, %d expected", tx.RowsAffected, count)
-// 	}
-// }
+	db := getDb(t)
+	tx := checkTxError(t, db.Create(&cs))
+	if tx.RowsAffected != int64(count) {
+		t.Errorf("batch insert affected %d rows, %d expected", tx.RowsAffected, count)
+	}
+}
