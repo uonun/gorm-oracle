@@ -7,6 +7,7 @@ create table CUSTOMERS
   city          VARCHAR2(50),
   state         VARCHAR2(20),
   zip_code      VARCHAR2(10),
+  created_time          Date,
   age number ,
   CONSTRAINT customer_pk PRIMARY KEY (customer_id)
 )

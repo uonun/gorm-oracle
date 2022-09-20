@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"reflect"
 	"strings"
 
 	_ "github.com/sijms/go-ora/v2"
@@ -33,7 +34,9 @@ type Dialector interface {
 // https://gorm.io/docs/write_driver.html
 
 const (
-	dialectorName string = "oracle"
+	dialectorName        string = "oracle"
+	ctxKeyIsBatchInsert  string = "is_batch_insert"
+	ctxKeyNextFieldIndex string = "next_field_index"
 )
 
 type Config struct {
@@ -164,14 +167,11 @@ func (dialector Dialector) DataTypeOf(field *schema.Field) string {
 }
 
 func (dialector Dialector) SavePoint(tx *gorm.DB, name string) error {
-	// TODO: validate the parameter
-	tx.Exec(fmt.Sprintf("SAVEPOINT %s", name))
-	return tx.Error
+	return tx.Exec("SAVEPOINT " + name).Error
 }
 
 func (dialector Dialector) RollbackTo(tx *gorm.DB, name string) error {
-	tx.Exec(fmt.Sprintf("ROLLBACK TO SAVEPOINT %s", name))
-	return tx.Error
+	return tx.Exec("ROLLBACK TO SAVEPOINT " + name).Error
 }
 
 const (
@@ -180,8 +180,8 @@ const (
 	// ClauseValues for clause.ClauseBuilder VALUES key
 	ClauseValues = "VALUES"
 	// ClauseValues for clause.ClauseBuilder FOR key
-	ClauseFor = "FOR"
-	// ClauseSequence = "SEQUENCE"
+	ClauseFor    = "FOR"
+	ClauseInsert = "INSERT"
 )
 
 func (dialector Dialector) ClauseBuilders() map[string]clause.ClauseBuilder {
@@ -228,20 +228,60 @@ func (dialector Dialector) ClauseBuilders() map[string]clause.ClauseBuilder {
 				}
 			}
 		},
-		ClauseValues: func(c clause.Clause, builder clause.Builder) {
-			if values, ok := c.Expression.(clause.Values); ok && len(values.Columns) == 0 {
-				builder.WriteString("VALUES()")
-				return
+		ClauseInsert: func(c clause.Clause, builder clause.Builder) {
+			insertClause, ok := c.Expression.(clause.Insert)
+			if ok {
+				stmt := builder.(*gorm.Statement)
+				k := stmt.ReflectValue.Kind()
+				if k == reflect.Slice || k == reflect.Array {
+					insertClause.Modifier = "ALL"
+					stmt.Context = context.WithValue(stmt.Context, ctxKeyIsBatchInsert, true)
+				}
+				insertClause.MergeClause(&c)
 			}
 			c.Build(builder)
 		},
-		// ClauseSequence: func(c clause.Clause, builder clause.Builder) {
-		// 	if values, ok := c.Expression.(clause.Values); ok && len(values.Columns) == 0 {
-		// 		builder.WriteString("VALUES()")
-		// 		return
-		// 	}
-		// 	c.Build(builder)
-		// },
+		ClauseValues: func(c clause.Clause, builder clause.Builder) {
+			values, _ := c.Expression.(clause.Values)
+
+			stmt := builder.(*gorm.Statement)
+			values = dialector.AddSequenceColumn(stmt, values)
+			values.MergeClause(&c)
+
+			if isBatchInsert, _ := stmt.Context.Value(ctxKeyIsBatchInsert).(bool); isBatchInsert {
+				// https://database.guide/4-ways-to-insert-multiple-rows-in-oracle/
+				// INSERT ALL
+				// 		INTO TABLE (C1, C2) VALUES (V1,V2)
+				// 		INTO TABLE (C1, C2) VALUES (V1,V2)
+				// 		INTO TABLE (C1, C2) VALUES (V1,V2)
+				// SELECT 1 FORM DUAL
+
+				colCount := len(values.Columns)
+				colClausePart1 := " ("
+				for i := 0; i < colCount; i++ {
+					colClausePart1 += values.Columns[i].Name
+					if i < colCount-1 {
+						colClausePart1 += ","
+					}
+				}
+				colClausePart1 += ") VALUES ("
+				colClausePart2 := ")"
+			
+				valCount := len(values.Values)
+				for i := 0; i < valCount; i++ {
+					if i > 0 {
+						builder.WriteString(fmt.Sprintf(" INTO %s ", stmt.Schema.Table))
+					}
+					builder.WriteString(colClausePart1)
+					stmt.AddVar(builder, values.Values[i]...)
+					builder.WriteString(colClausePart2)
+				}
+
+				builder.WriteString(" SELECT 1 FROM DUAL ")
+			} else {
+				c.Build(builder)
+			}
+		},
 	}
 
 	// if dialector.Config.DontSupportForShareClause {
@@ -269,17 +309,61 @@ func (dialector Dialector) BindVarTo(writer clause.Writer, stmt *gorm.Statement,
 		return
 	}
 
-	idx := stmt.Context.Value("sequence_column_idx").(int)
-	field := stmt.Schema.Fields[idx]
+	writer.WriteString(dialector.BindVarParameter(stmt))
+}
 
-	if seqName, isSeq := field.TagSettings["SEQUENCE"]; isSeq {
-		writer.WriteString(fmt.Sprintf("%s.nextval", seqName))
+// AddSequenceColumn add sequence column
+func (dialector Dialector) AddSequenceColumn(stmt *gorm.Statement, values clause.Values) clause.Values {
+	dbNameCount := len(stmt.Schema.DBNames)
+	for i := 0; i < dbNameCount; i++ {
+		db := stmt.Schema.DBNames[i]
+		field := stmt.Schema.FieldsByDBName[db]
+		if _, isSeq := field.TagSettings["SEQUENCE"]; isSeq {
+			if i < len(values.Columns) {
+				values.Columns = append(values.Columns[:i+1], values.Columns[i:]...)
+				values.Columns[i] = clause.Column{Name: db}
+				for j := 0; j < len(values.Values); j++ {
+					values.Values[j] = append(values.Values[j][:i+1], values.Values[j][i:]...)
+					values.Values[j][i] = field.DefaultValueInterface
+				}
+			} else {
+				values.Columns = append(values.Columns, clause.Column{Name: db})
+				values.Values[i] = append(values.Values[i], field.DefaultValueInterface)
+			}
+		}
+	}
+	return values
+}
 
-		// use the "nextval" as value, so remove current value by index, use one less parameter
-		stmt.Vars = append(stmt.Vars[:idx], stmt.Vars[idx+1:]...)
+func (dialector Dialector) BindVarParameter(stmt *gorm.Statement) string {
 
+	// the value for sequence column need to be removed
+	// use the index to record the removed one in the looping
+	idx, ok := stmt.Context.Value(ctxKeyNextFieldIndex).(int)
+	if ok {
+		stmt.Context = context.WithValue(stmt.Context, ctxKeyNextFieldIndex, idx+1)
 	} else {
-		writer.WriteString(fmt.Sprintf(":p%d", len(stmt.Vars)))
+		stmt.Context = context.WithValue(stmt.Context, ctxKeyNextFieldIndex, 1)
+	}
+
+	fieldIndex := idx % len(stmt.Schema.Fields)
+	valueIndex := idx / len(stmt.Schema.Fields)
+
+	field := stmt.Schema.Fields[fieldIndex]
+	if seqName, isSeq := field.TagSettings["SEQUENCE"]; isSeq {
+
+		// for sequence Columns, need no value to bind to parameters
+		removing := len(stmt.Vars) - 1
+		stmt.Vars = append(stmt.Vars[:removing], stmt.Vars[removing+1:]...)
+
+		isBatchInsert, ok := stmt.Context.Value(ctxKeyIsBatchInsert).(bool)
+		if ok && isBatchInsert && valueIndex > 0 {
+			return fmt.Sprintf("%s.nextval + %d", seqName, valueIndex)
+		} else {
+			return fmt.Sprintf("%s.nextval", seqName)
+		}
+	} else {
+		return fmt.Sprintf(":p%d_%s", valueIndex, field.Name)
 	}
 }
 
