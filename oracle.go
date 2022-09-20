@@ -234,7 +234,7 @@ func (dialector Dialector) ClauseBuilders() map[string]clause.ClauseBuilder {
 				stmt := builder.(*gorm.Statement)
 				k := stmt.ReflectValue.Kind()
 				if k == reflect.Slice || k == reflect.Array {
-					insertClause.Modifier = "ALL"
+					//insertClause.Modifier = "ALL"
 					stmt.Context = context.WithValue(stmt.Context, ctxKeyIsBatchInsert, true)
 				}
 				insertClause.MergeClause(&c)
@@ -249,35 +249,48 @@ func (dialector Dialector) ClauseBuilders() map[string]clause.ClauseBuilder {
 			values.MergeClause(&c)
 
 			if isBatchInsert, _ := stmt.Context.Value(ctxKeyIsBatchInsert).(bool); isBatchInsert {
-				// https://database.guide/4-ways-to-insert-multiple-rows-in-oracle/
-				// INSERT ALL
-				// 		INTO TABLE (C1, C2) VALUES (V1,V2)
-				// 		INTO TABLE (C1, C2) VALUES (V1,V2)
-				// 		INTO TABLE (C1, C2) VALUES (V1,V2)
-				// SELECT 1 FORM DUAL
 
+				// INSERT INTO tableName (id,col1,col2)
+				// 	SELECT tableSequence.NEXTVAL, col1, col2
+				// 		FROM (
+				// 			SELECT :p0_0 AS col1, :p0_1 AS col2 FROM DUAL UNION ALL
+				// 			SELECT :p1_0 AS col1, :p1_1 AS col2 FROM DUAL UNION ALL
+				// 			SELECT :p2_0 AS col1, :p2_1 AS col2 FROM DUAL
+				// 		)
+
+				colInsert := ""
+				colSelect := ""
 				colCount := len(values.Columns)
-				colClausePart1 := " ("
 				for i := 0; i < colCount; i++ {
-					colClausePart1 += values.Columns[i].Name
+					field := stmt.Schema.Fields[i]
+
+					colInsert += values.Columns[i].Name
+					if seqName, isSeq := field.TagSettings["SEQUENCE"]; isSeq {
+						colSelect += fmt.Sprintf("%s.NEXTVAL", seqName)
+					} else {
+						colSelect += field.Name
+					}
+
 					if i < colCount-1 {
-						colClausePart1 += ","
+						colInsert += ","
+						colSelect += ","
 					}
 				}
-				colClausePart1 += ") VALUES ("
-				colClausePart2 := ")"
-			
+
+				builder.WriteString(fmt.Sprintf("(%s) SELECT %s FROM (", colInsert, colSelect))
+
 				valCount := len(values.Values)
 				for i := 0; i < valCount; i++ {
-					if i > 0 {
-						builder.WriteString(fmt.Sprintf(" INTO %s ", stmt.Schema.Table))
-					}
-					builder.WriteString(colClausePart1)
+					builder.WriteString("SELECT ")
 					stmt.AddVar(builder, values.Values[i]...)
-					builder.WriteString(colClausePart2)
+					builder.WriteString(" FROM DUAL ")
+
+					if i < valCount-1 {
+						builder.WriteString("UNION ALL ")
+					}
 				}
 
-				builder.WriteString(" SELECT 1 FROM DUAL ")
+				builder.WriteString(")")
 			} else {
 				c.Build(builder)
 			}
@@ -299,17 +312,6 @@ func (dialector Dialector) ClauseBuilders() map[string]clause.ClauseBuilder {
 
 func (dialector Dialector) DefaultValueOf(field *schema.Field) clause.Expression {
 	return clause.Expr{SQL: "DEFAULT"}
-}
-
-func (dialector Dialector) BindVarTo(writer clause.Writer, stmt *gorm.Statement, v interface{}) {
-
-	isInsert := utils.Contains(stmt.BuildClauses, "INSERT")
-	if !isInsert {
-		writer.WriteString(fmt.Sprintf(":p%d", len(stmt.Vars)))
-		return
-	}
-
-	writer.WriteString(dialector.BindVarParameter(stmt))
 }
 
 // AddSequenceColumn add sequence column
@@ -335,6 +337,17 @@ func (dialector Dialector) AddSequenceColumn(stmt *gorm.Statement, values clause
 	return values
 }
 
+func (dialector Dialector) BindVarTo(writer clause.Writer, stmt *gorm.Statement, v interface{}) {
+
+	isInsert := utils.Contains(stmt.BuildClauses, "INSERT")
+	if !isInsert {
+		writer.WriteString(fmt.Sprintf(":p%d", len(stmt.Vars)))
+		return
+	}
+
+	writer.WriteString(dialector.BindVarParameter(stmt))
+}
+
 func (dialector Dialector) BindVarParameter(stmt *gorm.Statement) string {
 
 	// the value for sequence column need to be removed
@@ -357,13 +370,20 @@ func (dialector Dialector) BindVarParameter(stmt *gorm.Statement) string {
 		stmt.Vars = append(stmt.Vars[:removing], stmt.Vars[removing+1:]...)
 
 		isBatchInsert, ok := stmt.Context.Value(ctxKeyIsBatchInsert).(bool)
-		if ok && isBatchInsert && valueIndex > 0 {
-			return fmt.Sprintf("%s.nextval + %d", seqName, valueIndex)
+		if ok && isBatchInsert {
+			// placeholder for sequence column
+			return "1"
 		} else {
-			return fmt.Sprintf("%s.nextval", seqName)
+			return fmt.Sprintf("%s.NEXTVAL", seqName)
 		}
+
 	} else {
-		return fmt.Sprintf(":p%d_%s", valueIndex, field.Name)
+		isBatchInsert, ok := stmt.Context.Value(ctxKeyIsBatchInsert).(bool)
+		if ok && isBatchInsert {
+			return fmt.Sprintf(":p%d_%d AS %s", valueIndex, fieldIndex, field.Name)
+		} else {
+			return fmt.Sprintf(":p%d_%s", valueIndex, field.Name)
+		}
 	}
 }
 

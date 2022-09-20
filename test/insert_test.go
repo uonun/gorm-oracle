@@ -33,7 +33,7 @@ func TestInsertModel(t *testing.T) {
 }
 
 func TestInsertModels(t *testing.T) {
-	count := 2
+	count := 4
 	batchId := uuid.NewString()
 	cs := make([]Customer, count)
 	for i := 0; i < count; i++ {
