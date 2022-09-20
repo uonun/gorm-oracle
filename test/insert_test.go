@@ -20,7 +20,9 @@ func TestInsertRaw(t *testing.T) {
 
 	// NOTE: Anonymous parameters only, passed by order
 	checkTxError(t,
-		db.Exec("INSERT INTO CUSTOMERS VALUES (customers_s.nextval,:1,:2,:3,:4,:5,:6)",
+		db.Exec(`INSERT INTO CUSTOMERS 
+				(customer_id,customer_name,address,city,state,zip_code,age) VALUES 
+				(customers_s.nextval,:1,:2,:3,:4,:5,:6)`,
 			customer_name, address, city, state, zip, age))
 
 }
