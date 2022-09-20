@@ -3,6 +3,7 @@ package test
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -12,13 +13,12 @@ func TestTxInsertRaw(t *testing.T) {
 	var customer_name1 = fmt.Sprintf("TestTxInsertRaw:row1:%s", uuid.New().String())
 	var customer_name2 = fmt.Sprintf("TestTxInsertRaw:row2:%s", uuid.New().String())
 	var address = "address1"
-	var city = "city1"
-	var state = "state1"
-	var zip = "zip1"
+	var date = time.Now()
 	var age = 101
-	var sql = "INSERT INTO CUSTOMERS VALUES (CUSTOMERS_S.nextval,:1,:2,:3,:4,:5,:6)"
-	var vals1 = []interface{}{customer_name1, address, city, state, zip, age}
-	var vals2 = []interface{}{customer_name2, address, city, state, zip, age}
+	var sql = `INSERT INTO CUSTOMERS (customer_id,customer_name,address,created_time,age) 
+		VALUES (CUSTOMERS_S.nextval,:1,:2,:3,:4)`
+	var vals1 = []interface{}{customer_name1, address, date, age}
+	var vals2 = []interface{}{customer_name2, address, date, age}
 
 	db := getDb(t).Begin()
 	defer func() {
