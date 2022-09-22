@@ -1,4 +1,4 @@
-module github.com/udnz/gorm-oracle
+module github.com/uonun/gorm-oracle
 
 go 1.15
 
