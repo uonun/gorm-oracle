@@ -2,6 +2,10 @@
 
 ## 使用指引
 
+```bash
+go get github.com/uonun/gorm-oracle
+```
+
 ```golang
 import (
 	"..."
