@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	go_ora "github.com/sijms/go-ora/v2"
-	oracle "github.com/udnz/gorm-oracle"
+	oracle "github.com/uonun/gorm-oracle"
 	"gorm.io/gorm"
 )
 
