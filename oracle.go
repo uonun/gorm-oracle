@@ -113,7 +113,7 @@ func (dialector Dialector) Initialize(db *gorm.DB) (err error) {
 		}
 	}
 
-	if !dialector.Config.InitializeWithVersion {
+	if dialector.Config.InitializeWithVersion {
 		err = db.ConnPool.QueryRowContext(ctx, "SELECT * FROM v$version	WHERE banner LIKE 'Oracle%'").Scan(&dialector.ServerVersion)
 		if err != nil {
 			return err
@@ -317,20 +317,35 @@ func (dialector Dialector) DefaultValueOf(field *schema.Field) clause.Expression
 // AddSequenceColumn add sequence column
 func (dialector Dialector) AddSequenceColumn(stmt *gorm.Statement, values clause.Values) clause.Values {
 	dbNameCount := len(stmt.Schema.DBNames)
+
+	isExists := func(cols []clause.Column, colName string) bool {
+		if cols != nil {
+
+			for i := 0; i < len(cols); i++ {
+				if cols[i].Name == colName {
+					return true
+				}
+			}
+		}
+		return false
+	}
+
 	for i := 0; i < dbNameCount; i++ {
 		db := stmt.Schema.DBNames[i]
 		field := stmt.Schema.FieldsByDBName[db]
 		if _, isSeq := field.TagSettings["SEQUENCE"]; isSeq {
-			if i < len(values.Columns) {
-				values.Columns = append(values.Columns[:i+1], values.Columns[i:]...)
-				values.Columns[i] = clause.Column{Name: db}
-				for j := 0; j < len(values.Values); j++ {
-					values.Values[j] = append(values.Values[j][:i+1], values.Values[j][i:]...)
-					values.Values[j][i] = field.DefaultValueInterface
+			if exists := isExists(values.Columns, db); !exists {
+				if i < len(values.Columns) {
+					values.Columns = append(values.Columns[:i+1], values.Columns[i:]...)
+					values.Columns[i] = clause.Column{Name: db}
+					for j := 0; j < len(values.Values); j++ {
+						values.Values[j] = append(values.Values[j][:i+1], values.Values[j][i:]...)
+						values.Values[j][i] = field.DefaultValueInterface
+					}
+				} else {
+					values.Columns = append(values.Columns, clause.Column{Name: db})
+					values.Values[i] = append(values.Values[i], field.DefaultValueInterface)
 				}
-			} else {
-				values.Columns = append(values.Columns, clause.Column{Name: db})
-				values.Values[i] = append(values.Values[i], field.DefaultValueInterface)
 			}
 		}
 	}
@@ -372,7 +387,7 @@ func (dialector Dialector) BindVarParameter(stmt *gorm.Statement) string {
 		isBatchInsert, ok := stmt.Context.Value(ctxKeyIsBatchInsert).(bool)
 		if ok && isBatchInsert {
 			// placeholder for sequence column
-			return "1"
+			return "NULL"
 		} else {
 			return fmt.Sprintf("%s.NEXTVAL", seqName)
 		}
