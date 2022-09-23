@@ -19,6 +19,10 @@ func main(){
     "CONNECTION TIMEOUT": "3",
   }
   // build DSN
+  // CONN=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=***)(PORT=***))(CONNECT_DATA=(SERVER=DEDICATED)(SERVICE_NAME=***)))
+  // USER= ""
+  // PASSWORD = ""
+  // oracle://{USER}:{PASSWORD}@:0/?CONNECTION TIMEOUT=3&connStr=CONN_TNS
   dsn = go_ora.BuildJDBC(os.Getenv("USER"), 
     os.Getenv("PASSWORD"), 
     os.Getenv("CONN"), urlOptions)
@@ -55,3 +59,9 @@ func main(){
 
 - First、不带条件的 Take 等会生成 LIMIT 子句的方法
 - 查询命令的参数传递时，只能按顺序匿名传入，无法按名称传入
+
+## TODO
+
+- [ ] 配置 db.BatchInsertSize > 0 的情况（finisher_api.go:L18）
+- [ ] 支持根据 Model 按需 Create，从而无需 Model 包含所有数据库字段
+- [ ] 

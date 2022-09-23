@@ -27,7 +27,11 @@ func initDSN() {
 
 	// set connection time for 3 second
 	urlOptions := map[string]string{
-		"CONNECTION TIMEOUT": "3",
+		"Connection Timeout": "60",
+		"Pooling":            "true",
+		"Max Pool Size":      "40",
+		"Min Pool Size":      "2",
+		"Incr Pool Size":     "5",
 	}
 	dsn = go_ora.BuildJDBC(os.Getenv("USER"), os.Getenv("PASSWORD"), os.Getenv("CONN"), urlOptions)
 	fmt.Printf("==> DSN: %s\n", dsn)
