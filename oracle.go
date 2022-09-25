@@ -62,7 +62,7 @@ type Config struct {
 
 var (
 	// CreateClauses create clauses
-	CreateClauses = []string{"INSERT", "VALUES", "ON CONFLICT"}
+	CreateClauses = []string{"INSERT", "VALUES", "ON CONFLICT", "RETURNING"}
 	// QueryClauses query clauses
 	QueryClauses = []string{}
 	// UpdateClauses update clauses
@@ -177,6 +177,7 @@ func (dialector Dialector) RollbackTo(tx *gorm.DB, name string) error {
 const (
 	// ClauseOnConflict for clause.ClauseBuilder ON CONFLICT key
 	ClauseOnConflict = "ON CONFLICT"
+	ClauseReturning  = "RETURNING"
 	// ClauseValues for clause.ClauseBuilder VALUES key
 	ClauseValues = "VALUES"
 	// ClauseValues for clause.ClauseBuilder FOR key
@@ -228,6 +229,110 @@ func (dialector Dialector) ClauseBuilders() map[string]clause.ClauseBuilder {
 				}
 			}
 		},
+		ClauseReturning: func(c clause.Clause, builder clause.Builder) {
+			returning, ok := c.Expression.(clause.Returning)
+			if !ok {
+				c.Build(builder)
+				return
+			}
+
+			// RETURNING id INTO l_id;
+			builder.WriteString("RETURNING ")
+
+			stmt := builder.(*gorm.Statement)
+			colCount := len(returning.Columns)
+			type fieldSet struct {
+				f   *schema.Field
+				idx int
+			}
+			returningFields := make([]fieldSet, colCount)
+			for i := 0; i < colCount; i++ {
+				colName := returning.Columns[i].Name
+				if i > 0 {
+					builder.WriteByte(',')
+				}
+				builder.WriteString(colName)
+
+				for idx, f := range stmt.Schema.Fields {
+					if f.DBName == colName {
+						returningFields[i] = fieldSet{f, idx}
+						break
+					}
+				}
+			}
+
+			isBatchInsert, _ := stmt.Context.Value(ctxKeyIsBatchInsert).(bool)
+			if isBatchInsert {
+				builder.WriteString(" BULK COLLECT INTO ")
+			} else {
+				builder.WriteString(" INTO ")
+			}
+
+			for _, fs := range returningFields {
+				v := stmt.ReflectValue
+				kind := v.Kind()
+				switch kind {
+				case reflect.Slice, reflect.Array:
+					panic("not implemented")
+					// if v.Len() == 0 {
+					// } else if v.Type().Elem() == reflect.TypeOf(uint8(0)) {
+					// 	stmt.Vars = append(stmt.Vars, v)
+					// 	builder.WriteString(fmt.Sprintf(":o0_%d_%s", fs.idx, fs.f.DBName))
+					// } else {
+					// 	for i := 0; i < v.Len(); i++ {
+					// 		vv := v.Index(i).Field(fs.idx).Addr().Interface()
+					// 		stmt.Vars = append(stmt.Vars, vv)
+					// 		if i > 0 {
+					// 			builder.WriteByte(',')
+					// 		}
+					// 		builder.WriteString(fmt.Sprintf(":o%d_%d_%s", i, fs.idx, fs.f.DBName))
+					// 	}
+					// }
+				default:
+					vv := v.Field(fs.idx).Addr().Interface()
+					stmt.Vars = append(stmt.Vars, vv)
+					builder.WriteString(fmt.Sprintf(":o0_%d_%s", fs.idx, fs.f.DBName))
+				}
+			}
+
+			// returning.MergeClause(&c)
+			// c.Build(builder)
+
+			// builder.WriteString("ON DUPLICATE KEY UPDATE ")
+			// if len(onConflict.DoUpdates) == 0 {
+			// 	if s := builder.(*gorm.Statement).Schema; s != nil {
+			// 		var column clause.Column
+			// 		onConflict.DoNothing = false
+
+			// 		if s.PrioritizedPrimaryField != nil {
+			// 			column = clause.Column{Name: s.PrioritizedPrimaryField.DBName}
+			// 		} else if len(s.DBNames) > 0 {
+			// 			column = clause.Column{Name: s.DBNames[0]}
+			// 		}
+
+			// 		if column.Name != "" {
+			// 			onConflict.DoUpdates = []clause.Assignment{{Column: column, Value: column}}
+			// 		}
+			// 	}
+			// }
+
+			// for idx, assignment := range onConflict.DoUpdates {
+			// 	if idx > 0 {
+			// 		builder.WriteByte(',')
+			// 	}
+
+			// 	builder.WriteQuoted(assignment.Column)
+			// 	builder.WriteByte('=')
+			// 	if column, ok := assignment.Value.(clause.Column); ok && column.Table == "excluded" {
+			// 		column.Table = ""
+			// 		builder.WriteString("VALUES(")
+			// 		builder.WriteQuoted(column)
+			// 		builder.WriteByte(')')
+			// 	} else {
+			// 		builder.AddVar(builder, assignment.Value)
+			// 	}
+			// }
+		},
 		ClauseInsert: func(c clause.Clause, builder clause.Builder) {
 			insertClause, ok := c.Expression.(clause.Insert)
 			if ok {
@@ -242,7 +347,11 @@ func (dialector Dialector) ClauseBuilders() map[string]clause.ClauseBuilder {
 			c.Build(builder)
 		},
 		ClauseValues: func(c clause.Clause, builder clause.Builder) {
-			values, _ := c.Expression.(clause.Values)
+			values, ok := c.Expression.(clause.Values)
+			if !ok {
+				c.Build(builder)
+				return
+			}
 
 			stmt := builder.(*gorm.Statement)
 			values = dialector.AddSequenceColumn(stmt, values)
@@ -262,6 +371,11 @@ func (dialector Dialector) ClauseBuilders() map[string]clause.ClauseBuilder {
 				colSelect := ""
 				colCount := len(values.Columns)
 				for i := 0; i < colCount; i++ {
+					if i > 0 {
+						colInsert += ","
+						colSelect += ","
+					}
+
 					field := stmt.Schema.Fields[i]
 
 					colInsert += values.Columns[i].Name
@@ -271,10 +385,6 @@ func (dialector Dialector) ClauseBuilders() map[string]clause.ClauseBuilder {
 						colSelect += field.Name
 					}
 
-					if i < colCount-1 {
-						colInsert += ","
-						colSelect += ","
-					}
 				}
 
 				builder.WriteString(fmt.Sprintf("(%s) SELECT %s FROM (", colInsert, colSelect))
@@ -311,7 +421,7 @@ func (dialector Dialector) ClauseBuilders() map[string]clause.ClauseBuilder {
 }
 
 func (dialector Dialector) DefaultValueOf(field *schema.Field) clause.Expression {
-	return clause.Expr{SQL: "DEFAULT"}
+	return clause.Expr{SQL: "NULL"}
 }
 
 // AddSequenceColumn add sequence column
@@ -332,7 +442,7 @@ func (dialector Dialector) AddSequenceColumn(stmt *gorm.Statement, values clause
 
 	for i := 0; i < dbNameCount; i++ {
 		db := stmt.Schema.DBNames[i]
-		field := stmt.Schema.FieldsByDBName[db]
+		field := stmt.Schema.LookUpField(db)
 		if _, isSeq := field.TagSettings["SEQUENCE"]; isSeq {
 			if exists := isExists(values.Columns, db); !exists {
 				if i < len(values.Columns) {
