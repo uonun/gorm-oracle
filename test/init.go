@@ -48,7 +48,7 @@ func getDb(t *testing.T) *gorm.DB {
 		t.Fatalf("getDb Error %s", err)
 	}
 
-	return db
+	return db.Debug()
 }
 
 func getRandomCustomer(name string) Customer {

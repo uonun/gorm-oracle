@@ -70,14 +70,11 @@ func TestInsertModelsReturning(t *testing.T) {
 	batchId := uuid.NewString()
 	cs := make([]CustomerReturning, count)
 	for i := 0; i < count; i++ {
-		cs[i] = getRandomCustomerReturning(fmt.Sprintf("TestInsertModels:batch-%s:", batchId))
+		cs[i] = getRandomCustomerReturning(fmt.Sprintf("11:batch-%s:", batchId))
 	}
 
 	db := getDb(t)
-	tx := checkTxError(t, db.Create(&cs))
-	if tx.RowsAffected != int64(count) {
-		t.Errorf("batch insert affected %d rows, %d expected", tx.RowsAffected, count)
-	}
+	checkTxError(t, db.Create(&cs))
 
 	ids := make([]string, count)
 	for i := 0; i < count; i++ {

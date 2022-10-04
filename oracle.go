@@ -36,6 +36,7 @@ type Dialector interface {
 const (
 	dialectorName        string = "oracle"
 	ctxKeyIsBatchInsert  string = "is_batch_insert"
+	ctxKeyAllFields      string = "allFields"
 	ctxKeyNextFieldIndex string = "next_field_index"
 )
 
@@ -185,6 +186,12 @@ const (
 	ClauseInsert = "INSERT"
 )
 
+type fieldSet struct {
+	idx int
+	f   schema.Field
+	c   clause.Column
+}
+
 func (dialector Dialector) ClauseBuilders() map[string]clause.ClauseBuilder {
 	clauseBuilders := map[string]clause.ClauseBuilder{
 		ClauseOnConflict: func(c clause.Clause, builder clause.Builder) {
@@ -230,121 +237,63 @@ func (dialector Dialector) ClauseBuilders() map[string]clause.ClauseBuilder {
 			}
 		},
 		ClauseReturning: func(c clause.Clause, builder clause.Builder) {
-			returning, ok := c.Expression.(clause.Returning)
+			_, ok := c.Expression.(clause.Returning)
 			if !ok {
 				c.Build(builder)
 				return
 			}
 
-			// RETURNING id INTO l_id;
-			builder.WriteString("RETURNING ")
+			// stmt := builder.(*gorm.Statement)
+			// if isBatchInsert, _ := stmt.Context.Value(ctxKeyIsBatchInsert).(bool); isBatchInsert {
+			// 	if allFields, ok := stmt.Context.Value(ctxKeyAllFields).([]fieldSet); ok {
+			// 		for _, rf := range returning.Columns {
+			// 			for _, fs := range allFields {
+			// 				if rf.Name != fs.f.DBName {
+			// 					continue
+			// 				}
 
-			stmt := builder.(*gorm.Statement)
-			colCount := len(returning.Columns)
-			type fieldSet struct {
-				f   *schema.Field
-				idx int
-			}
-			returningFields := make([]fieldSet, colCount)
-			for i := 0; i < colCount; i++ {
-				colName := returning.Columns[i].Name
-				if i > 0 {
-					builder.WriteByte(',')
-				}
-				builder.WriteString(colName)
-
-				for idx, f := range stmt.Schema.Fields {
-					if f.DBName == colName {
-						returningFields[i] = fieldSet{f, idx}
-						break
-					}
-				}
-			}
-
-			isBatchInsert, _ := stmt.Context.Value(ctxKeyIsBatchInsert).(bool)
-			if isBatchInsert {
-				builder.WriteString(" BULK COLLECT INTO ")
-			} else {
-				builder.WriteString(" INTO ")
-			}
-
-			for _, fs := range returningFields {
-				v := stmt.ReflectValue
-				kind := v.Kind()
-				switch kind {
-				case reflect.Slice, reflect.Array:
-					panic("not implemented")
-					// if v.Len() == 0 {
-					// } else if v.Type().Elem() == reflect.TypeOf(uint8(0)) {
-					// 	stmt.Vars = append(stmt.Vars, v)
-					// 	builder.WriteString(fmt.Sprintf(":o0_%d_%s", fs.idx, fs.f.DBName))
-					// } else {
-					// 	for i := 0; i < v.Len(); i++ {
-					// 		vv := v.Index(i).Field(fs.idx).Addr().Interface()
-					// 		stmt.Vars = append(stmt.Vars, vv)
-					// 		if i > 0 {
-					// 			builder.WriteByte(',')
-					// 		}
-					// 		builder.WriteString(fmt.Sprintf(":o%d_%d_%s", i, fs.idx, fs.f.DBName))
-					// 	}
-					// }
-				default:
-					vv := v.Field(fs.idx).Addr().Interface()
-					stmt.Vars = append(stmt.Vars, vv)
-					builder.WriteString(fmt.Sprintf(":o0_%d_%s", fs.idx, fs.f.DBName))
-				}
-			}
-
-			// returning.MergeClause(&c)
-			// c.Build(builder)
-
-			// builder.WriteString("ON DUPLICATE KEY UPDATE ")
-			// if len(onConflict.DoUpdates) == 0 {
-			// 	if s := builder.(*gorm.Statement).Schema; s != nil {
-			// 		var column clause.Column
-			// 		onConflict.DoNothing = false
-
-			// 		if s.PrioritizedPrimaryField != nil {
-			// 			column = clause.Column{Name: s.PrioritizedPrimaryField.DBName}
-			// 		} else if len(s.DBNames) > 0 {
-			// 			column = clause.Column{Name: s.DBNames[0]}
+			// 				v := stmt.ReflectValue
+			// 				kind := v.Kind()
+			// 				switch kind {
+			// 				case reflect.Slice, reflect.Array:
+			// 					if v.Len() == 0 {
+			// 					} else if v.Type().Elem() == reflect.TypeOf(uint8(0)) {
+			// 						stmt.Vars = append(stmt.Vars, v)
+			// 					} else {
+			// 						for i := 0; i < v.Len(); i++ {
+			// 							vv := v.Index(i).Field(fs.idx).Addr().Interface()
+			// 							stmt.Vars = append(stmt.Vars, vv)
+			// 							// if i > 0 {
+			// 							// 	builder.WriteByte(',')
+			// 							// }
+			// 							// builder.WriteString(fmt.Sprintf(":o%d_%d_%s", i, fs.idx, fs.f.DBName))
+			// 						}
+			// 					}
+			// 				default:
+			// 					vv := v.Field(fs.idx).Addr().Interface()
+			// 					stmt.Vars = append(stmt.Vars, vv)
+			// 					// builder.WriteString(fmt.Sprintf(":o0_%d_%s", fs.idx, fs.f.DBName))
+			// 				}
+			// 			}
 			// 		}
-
-			// 		if column.Name != "" {
-			// 			onConflict.DoUpdates = []clause.Assignment{{Column: column, Value: column}}
-			// 		}
-			// 	}
-			// }
-
-			// for idx, assignment := range onConflict.DoUpdates {
-			// 	if idx > 0 {
-			// 		builder.WriteByte(',')
-			// 	}
-
-			// 	builder.WriteQuoted(assignment.Column)
-			// 	builder.WriteByte('=')
-			// 	if column, ok := assignment.Value.(clause.Column); ok && column.Table == "excluded" {
-			// 		column.Table = ""
-			// 		builder.WriteString("VALUES(")
-			// 		builder.WriteQuoted(column)
-			// 		builder.WriteByte(')')
-			// 	} else {
-			// 		builder.AddVar(builder, assignment.Value)
 			// 	}
 			// }
 		},
 		ClauseInsert: func(c clause.Clause, builder clause.Builder) {
-			insertClause, ok := c.Expression.(clause.Insert)
-			if ok {
-				stmt := builder.(*gorm.Statement)
-				k := stmt.ReflectValue.Kind()
-				if k == reflect.Slice || k == reflect.Array {
-					//insertClause.Modifier = "ALL"
-					stmt.Context = context.WithValue(stmt.Context, ctxKeyIsBatchInsert, true)
-				}
-				insertClause.MergeClause(&c)
+			_, ok := c.Expression.(clause.Insert)
+			if !ok {
+				c.Build(builder)
+				return
 			}
-			c.Build(builder)
+
+			stmt := builder.(*gorm.Statement)
+			k := stmt.ReflectValue.Kind()
+			if k == reflect.Slice || k == reflect.Array {
+				stmt.Context = context.WithValue(stmt.Context, ctxKeyIsBatchInsert, true)
+			} else {
+				c.Build(builder)
+			}
+
 		},
 		ClauseValues: func(c clause.Clause, builder clause.Builder) {
 			values, ok := c.Expression.(clause.Values)
@@ -355,67 +304,84 @@ func (dialector Dialector) ClauseBuilders() map[string]clause.ClauseBuilder {
 
 			stmt := builder.(*gorm.Statement)
 			values = dialector.AddSequenceColumn(stmt, values)
-			values.MergeClause(&c)
+
+			colCount := len(values.Columns)
+			valCount := len(values.Values)
 
 			if isBatchInsert, _ := stmt.Context.Value(ctxKeyIsBatchInsert).(bool); isBatchInsert {
+				/*
+				   DECLARE
+				     TYPE t_forall_test_tab IS TABLE OF allen_test%ROWTYPE;
+				     r  t_forall_test_tab := t_forall_test_tab();
+				     l_size NUMBER := 3;
+				   BEGIN
+				     -- Populate collection.
+				     FOR i IN 1 .. l_size LOOP
+				       r.extend;
+				       r(r.last).id := allen_test_s.nextval;
+				       :id1 := r(r.last).id;
+				       r(r.last).col1 := TO_CHAR(i);
+				       r(r.last).col2 := 'Description: ' || TO_CHAR(i);
+				     END LOOP;
 
-				// INSERT INTO tableName (id,col1,col2)
-				// 	SELECT tableSequence.NEXTVAL, col1, col2
-				// 		FROM (
-				// 			SELECT :p0_0 AS col1, :p0_1 AS col2 FROM DUAL UNION ALL
-				// 			SELECT :p1_0 AS col1, :p1_1 AS col2 FROM DUAL UNION ALL
-				// 			SELECT :p2_0 AS col1, :p2_1 AS col2 FROM DUAL
-				// 		)
+				     -- Time bulk inserts.
+				     FORALL i IN r.first .. r.last
+				       INSERT INTO allen_test VALUES r (i);
+				     COMMIT;
 
+				   END;
+				*/
+
+				allFields := make([]fieldSet, colCount)
+				for i := 0; i < colCount; i++ {
+					colName := values.Columns[i].Name
+					for idx, f := range stmt.Schema.Fields {
+						if f.DBName == colName {
+							allFields[i] = fieldSet{idx, *f, values.Columns[i]}
+							break
+						}
+					}
+				}
 				colInsert := ""
-				colSelect := ""
 				colCount := len(values.Columns)
 				for i := 0; i < colCount; i++ {
 					if i > 0 {
 						colInsert += ","
-						colSelect += ","
 					}
-
-					field := stmt.Schema.Fields[i]
-
 					colInsert += values.Columns[i].Name
-					if seqName, isSeq := field.TagSettings["SEQUENCE"]; isSeq {
-						colSelect += fmt.Sprintf("%s.NEXTVAL", seqName)
-					} else {
-						colSelect += field.Name
-					}
-
 				}
 
-				builder.WriteString(fmt.Sprintf("(%s) SELECT %s FROM (", colInsert, colSelect))
-
-				valCount := len(values.Values)
+				builder.WriteString("DECLARE\n")
+				builder.WriteString(fmt.Sprintf("\tTYPE t IS TABLE OF %s%%ROWTYPE;\n", stmt.Schema.Table))
+				builder.WriteString("\tr t := t();\n")
+				builder.WriteString("BEGIN\n")
 				for i := 0; i < valCount; i++ {
-					builder.WriteString("SELECT ")
-					stmt.AddVar(builder, values.Values[i]...)
-					builder.WriteString(" FROM DUAL ")
-
-					if i < valCount-1 {
-						builder.WriteString("UNION ALL ")
+					builder.WriteString("\tr.extend;\n")
+					for j := 0; j < colCount; j++ {
+						fs := allFields[j]
+						para := ""
+						if seqName, isSeq := fs.f.TagSettings["SEQUENCE"]; isSeq {
+							builder.WriteString(fmt.Sprintf("\t:p%d_%d := %s.NEXTVAL;\n", i, fs.idx, seqName))
+							para = fmt.Sprintf(":p%d_%d", i, fs.idx)
+						} else {
+							para = fmt.Sprintf(":p%d_%d", i, fs.idx)
+						}
+						builder.WriteString(fmt.Sprintf("\tr(r.last).%s := %s;\n", fs.f.DBName, para))
 					}
+					stmt.Vars = append(stmt.Vars, values.Values[i]...)
 				}
+				builder.WriteString("\tFORALL i IN r.first .. r.last\n")
+				builder.WriteString(fmt.Sprintf("\t\tINSERT INTO %s VALUES r (i);\n", stmt.Schema.Table))
+				builder.WriteString("END;")
 
-				builder.WriteString(")")
+				stmt.Context = context.WithValue(stmt.Context, ctxKeyAllFields, allFields)
+				values.MergeClause(&c)
+
 			} else {
 				c.Build(builder)
 			}
 		},
 	}
-
-	// if dialector.Config.DontSupportForShareClause {
-	// 	clauseBuilders[ClauseFor] = func(c clause.Clause, builder clause.Builder) {
-	// 		if values, ok := c.Expression.(clause.Locking); ok && strings.EqualFold(values.Strength, "SHARE") {
-	// 			builder.WriteString("LOCK IN SHARE MODE")
-	// 			return
-	// 		}
-	// 		c.Build(builder)
-	// 	}
-	// }
 
 	return clauseBuilders
 }
@@ -430,7 +396,6 @@ func (dialector Dialector) AddSequenceColumn(stmt *gorm.Statement, values clause
 
 	isExists := func(cols []clause.Column, colName string) bool {
 		if cols != nil {
-
 			for i := 0; i < len(cols); i++ {
 				if cols[i].Name == colName {
 					return true
@@ -445,16 +410,26 @@ func (dialector Dialector) AddSequenceColumn(stmt *gorm.Statement, values clause
 		field := stmt.Schema.LookUpField(db)
 		if _, isSeq := field.TagSettings["SEQUENCE"]; isSeq {
 			if exists := isExists(values.Columns, db); !exists {
+
+				var idx int
+				for i, f := range stmt.Schema.Fields {
+					if f.DBName == field.DBName {
+						idx = i
+						break
+					}
+				}
+				v := stmt.ReflectValue
+
 				if i < len(values.Columns) {
 					values.Columns = append(values.Columns[:i+1], values.Columns[i:]...)
 					values.Columns[i] = clause.Column{Name: db}
 					for j := 0; j < len(values.Values); j++ {
 						values.Values[j] = append(values.Values[j][:i+1], values.Values[j][i:]...)
-						values.Values[j][i] = field.DefaultValueInterface
+						values.Values[j][i] = v.Index(j).Field(idx).Addr().Interface()
 					}
 				} else {
 					values.Columns = append(values.Columns, clause.Column{Name: db})
-					values.Values[i] = append(values.Values[i], field.DefaultValueInterface)
+					values.Values[i] = append(values.Values[i], v.Field(idx).Addr().Interface())
 				}
 			}
 		}
@@ -497,7 +472,7 @@ func (dialector Dialector) BindVarParameter(stmt *gorm.Statement) string {
 		isBatchInsert, ok := stmt.Context.Value(ctxKeyIsBatchInsert).(bool)
 		if ok && isBatchInsert {
 			// placeholder for sequence column
-			return "NULL"
+			// return "NULL"
 		} else {
 			return fmt.Sprintf("%s.NEXTVAL", seqName)
 		}
@@ -505,11 +480,13 @@ func (dialector Dialector) BindVarParameter(stmt *gorm.Statement) string {
 	} else {
 		isBatchInsert, ok := stmt.Context.Value(ctxKeyIsBatchInsert).(bool)
 		if ok && isBatchInsert {
-			return fmt.Sprintf(":p%d_%d AS %s", valueIndex, fieldIndex, field.Name)
+			// return fmt.Sprintf(":p%d_%d AS %s", valueIndex, fieldIndex, field.Name)
 		} else {
 			return fmt.Sprintf(":p%d_%s", valueIndex, field.Name)
 		}
 	}
+
+	return ""
 }
 
 func (dialector Dialector) QuoteTo(writer clause.Writer, str string) {
