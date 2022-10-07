@@ -48,7 +48,7 @@ func getDb(t *testing.T) *gorm.DB {
 		t.Fatalf("getDb Error %s", err)
 	}
 
-	return db
+	return db.Debug()
 }
 
 func getRandomCustomer(name string) Customer {
@@ -74,6 +74,31 @@ func getRandomCustomerReturning(name string) CustomerReturning {
 		Age:          rand.Int31(),
 	}
 }
+
+func getRandomCustomerReturningPrimaryKey(name string) CustomerReturningPrimaryKey {
+	return CustomerReturningPrimaryKey{
+		CustomerName: fmt.Sprintf("%s:%s", name, uuid.New().String()),
+		Address:      fmt.Sprintf("Address:%s", uuid.New().String()),
+		City:         fmt.Sprintf("City:%s", uuid.New().String()),
+		State:        fmt.Sprintf("State:%d", rand.Int31()),
+		ZipCode:      fmt.Sprintf("Z:%d", rand.Intn(9999)),
+		CreatedTime:  time.Now(),
+		Age:          rand.Int31(),
+	}
+}
+
+func getRandomCustomerHook(name string) CustomerHook {
+	return CustomerHook{
+		CustomerName: fmt.Sprintf("%s:%s", name, uuid.New().String()),
+		Address:      fmt.Sprintf("Address:%s", uuid.New().String()),
+		City:         fmt.Sprintf("City:%s", uuid.New().String()),
+		State:        fmt.Sprintf("State:%d", rand.Int31()),
+		ZipCode:      fmt.Sprintf("Z:%d", rand.Intn(9999)),
+		CreatedTime:  time.Now(),
+		Age:          rand.Int31(),
+	}
+}
+
 func checkTxError(t *testing.T, tx *gorm.DB) *gorm.DB {
 	if tx.Error != nil {
 		t.Errorf("%s: tx.Error %s", t.Name(), tx.Error)
