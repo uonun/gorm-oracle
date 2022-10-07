@@ -36,7 +36,7 @@ func main(){
 }
 ```
 
-## 已支持的内容
+## 已支持并测试的内容
 
 ### Connection
   - gorm.Open
@@ -80,7 +80,9 @@ tx := db.Clauses(clause.Returning{ // returning `CUSTOMER_ID`
 see: [TestInsertModelsWithReturningClause](./test/insert_test.go)
 
 ### Update
-  - // SUPPORT, TO BE TESTED
+  - db.Exec("UPDATE ... SET ...", ...)
+  - db.Updates(&model) // single update
+  - db.Where("id in ?", ids).Updates(model{}) // batch updates
 
 ### Delete
   - db.Delete(&model)

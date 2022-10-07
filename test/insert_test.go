@@ -89,6 +89,39 @@ func TestInsertModelsWithReturningClause(t *testing.T) {
 	t.Logf("created: %s", strings.Join(ids, ","))
 }
 
+func TestInsertModelsWithReturningClause2(t *testing.T) {
+	count := 4
+	batchId := uuid.NewString()
+	cs := make([]CustomerHook, count)
+	for i := 0; i < count; i++ {
+		cs[i] = getRandomCustomerHook(fmt.Sprintf("TestInsertModels:batch-%s:", batchId))
+	}
+
+	db := getDb(t)
+	tx := checkTxError(t, db.Clauses(clause.Returning{
+		Columns: []clause.Column{
+			{Name: "CUSTOMER_ID"},
+			// {Name: "STATE"}, // not need returning this column
+		},
+	}).Create(&cs))
+
+	// NOT SUPPORTED NOW
+	// var rowsExpected = int64(count)
+	// if tx.RowsAffected != rowsExpected {
+	// 	t.Errorf("batch insert %d rows affected, %d expected", tx.RowsAffected, rowsExpected)
+	// }
+
+	ids := make([]string, count)
+	for i := 0; i < count; i++ {
+		cid := cs[i].CustomerID
+		ids[i] = strconv.FormatInt(cid, 10)
+		if cid == 0 || !strings.HasPrefix(cs[i].State, "HOOK") {
+			t.Errorf("not returning created value: %s", tx.Error)
+		}
+	}
+	t.Logf("created: %s", strings.Join(ids, ","))
+}
+
 func TestInsertReturningModel(t *testing.T) {
 	c := getRandomCustomerReturning("TestInsertModelReturning")
 
