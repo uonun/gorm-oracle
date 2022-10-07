@@ -34,20 +34,12 @@ func TestInsertModel(t *testing.T) {
 	c := getRandomCustomer("TestInsertModel")
 
 	db := getDb(t)
-	checkTxError(t, db.Create(&c))
-}
+	tx := checkTxError(t, db.Create(&c))
 
-func TestInsertModelReturning(t *testing.T) {
-	c := getRandomCustomerReturning("TestInsertModelReturning")
-
-	db := getDb(t)
-	checkTxError(t, db.Create(&c).Clauses(clause.Returning{}))
-
-	if c.CustomerID <= 0 {
-		t.Errorf("create failed or not returning new id")
+	var rowsExpected int64 = 1
+	if tx.RowsAffected != rowsExpected {
+		t.Errorf("%d rows affected, %d expected", tx.RowsAffected, rowsExpected)
 	}
-
-	t.Logf("created: %d", c.CustomerID)
 }
 
 func TestInsertModels(t *testing.T) {
@@ -61,27 +53,83 @@ func TestInsertModels(t *testing.T) {
 	db := getDb(t)
 	tx := checkTxError(t, db.Create(&cs).Clauses(clause.Returning{}))
 	if tx.RowsAffected != int64(count) {
-		t.Errorf("batch insert affected %d rows, %d expected", tx.RowsAffected, count)
+		t.Errorf("batch insert %d rows affected, %d expected", tx.RowsAffected, count)
 	}
 }
 
-func TestInsertModelsReturning(t *testing.T) {
+func TestInsertModelsWithReturningClause(t *testing.T) {
 	count := 4
 	batchId := uuid.NewString()
-	cs := make([]CustomerReturning, count)
+	cs := make([]Customer, count)
 	for i := 0; i < count; i++ {
-		cs[i] = getRandomCustomerReturning(fmt.Sprintf("11:batch-%s:", batchId))
+		cs[i] = getRandomCustomer(fmt.Sprintf("TestInsertModels:batch-%s:", batchId))
 	}
 
 	db := getDb(t)
-	checkTxError(t, db.Create(&cs))
+	tx := checkTxError(t, db.Clauses(clause.Returning{
+		Columns: []clause.Column{
+			{Name: "CUSTOMER_ID"},
+		},
+	}).Create(&cs))
+
+	// NOT SUPPORTED NOW
+	// var rowsExpected = int64(count)
+	// if tx.RowsAffected != rowsExpected {
+	// 	t.Errorf("batch insert %d rows affected, %d expected", tx.RowsAffected, rowsExpected)
+	// }
 
 	ids := make([]string, count)
 	for i := 0; i < count; i++ {
 		cid := cs[i].CustomerID
 		ids[i] = strconv.FormatInt(cid, 10)
 		if cid == 0 {
-			t.Errorf("not returning created value")
+			t.Errorf("not returning created value: %s", tx.Error)
+		}
+	}
+	t.Logf("created: %s", strings.Join(ids, ","))
+}
+
+func TestInsertReturningModel(t *testing.T) {
+	c := getRandomCustomerReturning("TestInsertModelReturning")
+
+	db := getDb(t)
+	checkTxError(t, db.Create(&c))
+
+	// NOT SUPPORTED NOW
+	// var rowsExpected int64 = 1
+	// if tx.RowsAffected != rowsExpected {
+	// 	t.Errorf("%d rows affected, %d expected", tx.RowsAffected, rowsExpected)
+	// }
+
+	if c.CustomerID <= 0 {
+		t.Errorf("create failed or not returning new id")
+	}
+
+	t.Logf("created: %d", c.CustomerID)
+}
+
+func TestInsertReturningModels(t *testing.T) {
+	count := 4
+	batchId := uuid.NewString()
+	cs := make([]CustomerReturning, count)
+	for i := 0; i < count; i++ {
+		cs[i] = getRandomCustomerReturning(fmt.Sprintf("TestInsertModelsReturning:batch-%s:", batchId))
+	}
+
+	db := getDb(t)
+	tx := checkTxError(t, db.Create(&cs))
+
+	// NOT SUPPORTED NOW
+	// if tx.RowsAffected != int64(count) {
+	// 	t.Errorf("batch insert %d rows affected, %d expected", tx.RowsAffected, count)
+	// }
+
+	ids := make([]string, count)
+	for i := 0; i < count; i++ {
+		cid := cs[i].CustomerID
+		ids[i] = strconv.FormatInt(cid, 10)
+		if cid == 0 {
+			t.Errorf("not returning created value: %s", tx.Error)
 		}
 	}
 	t.Logf("created: %s", strings.Join(ids, ","))

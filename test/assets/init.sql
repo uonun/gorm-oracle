@@ -2,11 +2,11 @@
 create table CUSTOMERS
 (
   customer_id   NUMBER(10) not null,
-  customer_name VARCHAR2(100) not null,
-  address       VARCHAR2(100),
-  city          VARCHAR2(50),
-  state         VARCHAR2(20),
-  zip_code      VARCHAR2(10),
+  customer_name VARCHAR2(200) not null,
+  address       VARCHAR2(500),
+  city          VARCHAR2(500),
+  state         VARCHAR2(100),
+  zip_code      VARCHAR2(100),
   created_time          Date,
   age number ,
   CONSTRAINT customer_pk PRIMARY KEY (customer_id)

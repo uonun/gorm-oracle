@@ -38,30 +38,59 @@ func main(){
 
 ## 已支持的内容
 
-- Connection
+### Connection
   - gorm.Open
-- Query
+
+
+### Query
   - db.Raw("").Scan(&model)
   - db.Find(&model)
-- Insert
+
+### Insert
   - db.Exec("INSERT INTO ...", ...)
   - db.Create(&model)
   - db.Create(&multi_models)
-- Update
+  
+#### Returning
+
+Option 1: tag `autoIncrement` for sequence column to return. For example:
+
+```golang
+// Customer table comment
+type CustomerReturning struct {
+  CustomerID   int64     `gorm:"column:CUSTOMER_ID;sequence:CUSTOMERS_S;autoIncrement" json:"customer_id"`
+  // ... other fields
+}
+```
+
+see: [TestInsertReturningModels](./test/insert_test.go), [CustomerReturning](./test/models.go)
+
+Option 2: use `clause.Returning`.
+
+```golang
+db := getDb(t)
+cs := make([]Customer, 10) // init 10 instances.
+tx := db.Clauses(clause.Returning{ // returning `CUSTOMER_ID`
+    Columns: []clause.Column{
+      {Name: "CUSTOMER_ID"},
+    },
+  }).Create(&cs)) // create
+```
+
+see: [TestInsertModelsWithReturningClause](./test/insert_test.go)
+
+### Update
   - // SUPPORT, TO BE TESTED
-- Delete
+
+### Delete
   - db.Delete(&model)
-- Transaction
+
+### Transaction
   - db.Begin(), db.Rollback(), db.Commit()
   - db.SavePoint(""), db.RollbackTo("")
 
-## 「已知的」不支持内容
+## 暂未支持的内容
 
-- First、不带条件的 Take 等会生成 LIMIT 子句的方法
-- 查询命令的参数传递时，只能按顺序匿名传入，无法按名称传入
-
-## TODO
-
-- [ ] 配置 db.BatchInsertSize > 0 的情况（finisher_api.go:L18）
-- [ ] 支持根据 Model 按需 Create，从而无需 Model 包含所有数据库字段
-- [ ] 
+- 未支持 LIMIT 子句：如 First、不带条件的 Take。
+- 未支持命名参数：查询命令的参数传递时，只能按顺序匿名传入，无法按名称传入。
+- 有限支持 RowsAffected：包含 RETURNING 行为时，不支持通过 RowsAffected 返回实际的影响行数。
