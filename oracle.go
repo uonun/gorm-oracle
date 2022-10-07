@@ -36,7 +36,6 @@ type Dialector interface {
 const (
 	dialectorName        string = "oracle"
 	ctxKeyIsBatchInsert  string = "is_batch_insert"
-	ctxKeyAllFields      string = "allFields"
 	ctxKeyNextFieldIndex string = "next_field_index"
 )
 
@@ -274,7 +273,10 @@ func (dialector Dialector) ClauseBuilders() map[string]clause.ClauseBuilder {
 
 				builder.WriteString(" INTO ")
 
-				for _, fs := range returningFields {
+				for idx, fs := range returningFields {
+					if idx > 0 {
+						builder.WriteByte(',')
+					}
 					v := stmt.ReflectValue
 					vv := v.Field(fs.idx).Addr().Interface()
 					stmt.Vars = append(stmt.Vars, vv)
@@ -385,8 +387,6 @@ func (dialector Dialector) ClauseBuilders() map[string]clause.ClauseBuilder {
 					// builder.WriteString("\tDBMS_OUTPUT.PUT_LINE(TO_Char(SQL%ROWCOUNT)||' rows affected.');\n")
 					builder.WriteString("\tCOMMIT;\n")
 					builder.WriteString("END;")
-
-					stmt.Context = context.WithValue(stmt.Context, ctxKeyAllFields, allFields)
 				} else {
 					// INSERT INTO tableName (id,col1,col2)
 					// 	SELECT tableSequence.NEXTVAL, col1, col2
