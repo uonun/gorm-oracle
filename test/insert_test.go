@@ -2,6 +2,7 @@ package test
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -18,14 +19,15 @@ func TestInsertRaw(t *testing.T) {
 	var state = "state1"
 	var zip = "zip1"
 	var age = 10
+	var schemaName = os.Getenv("USER")
 
 	db := getDb(t)
 
 	// NOTE: Anonymous parameters only, passed by order
 	checkTxError(t,
-		db.Exec(`INSERT INTO CUSTOMERS 
-				(customer_id,customer_name,address,city,state,zip_code,age) VALUES 
-				(customers_s.nextval,:1,:2,:3,:4,:5,:6)`,
+		db.Exec(fmt.Sprintf(`INSERT INTO %s.CUSTOMERS 
+		(customer_id,customer_name,address,city,state,zip_code,age) VALUES 
+		(customers_s.nextval,:1,:2,:3,:4,:5,:6)`,schemaName),
 			customer_name, address, city, state, zip, age))
 
 }
