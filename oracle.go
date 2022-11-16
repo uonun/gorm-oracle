@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/pkg/errors"
 	_ "github.com/sijms/go-ora/v2"
 
 	"gorm.io/gorm"
@@ -58,6 +59,8 @@ type Config struct {
 	DontSupportRenameColumn bool
 	// DontSupportForShareClause     bool
 	DontSupportNullAsDefaultValue bool
+
+	DontPingWhenInitConn bool
 }
 
 var (
@@ -105,18 +108,35 @@ func (dialector Dialector) Initialize(db *gorm.DB) (err error) {
 	}
 
 	if dialector.Conn != nil {
-		db.ConnPool = dialector.Conn
-	} else {
+		if !dialector.Config.DontPingWhenInitConn {
+			if pinger, ok := dialector.Conn.(interface{ Ping() error }); ok {
+				err = pinger.Ping()
+			}
+			// 避免在 gorm.Open 里再 ping 一次
+			db.Config.DisableAutomaticPing = true
+		}
+
+		if err == nil {
+			db.ConnPool = dialector.Conn
+		} else {
+			if db.Config.Logger != nil {
+				db.Config.Logger.Info(context.Background(),
+					"ping failed, broken conn found, will reopen it with sql.Open: %s", err)
+			}
+		}
+	}
+
+	if dialector.Conn == nil {
 		db.ConnPool, err = sql.Open(dialector.DriverName, dialector.DSN)
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "sql.Open failed")
 		}
 	}
 
 	if dialector.Config.InitializeWithVersion {
 		err = db.ConnPool.QueryRowContext(ctx, "SELECT * FROM v$version	WHERE banner LIKE 'Oracle%'").Scan(&dialector.ServerVersion)
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "db.ConnPool.QueryRowContext failed")
 		}
 
 		// https://en.wikipedia.org/wiki/Oracle_Database
