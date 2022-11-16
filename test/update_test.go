@@ -56,7 +56,7 @@ func TestUpdateRawNoneExists(t *testing.T) {
 func TestUpdateModel(t *testing.T) {
 	c, db := createOne(t)
 
-	c.Address = uuid.New().String()
+	c.CustomerName = uuid.New().String()
 	c.Age = rand.Int31()
 
 	tx := checkTxError(t, db.Updates(&c))
@@ -66,7 +66,7 @@ func TestUpdateModel(t *testing.T) {
 
 	var updatedC Customer
 	tx = checkTxError(t, db.
-		Where("address=? and age=? and customer_id=?", c.Address, c.Age, c.CustomerID).
+		Where("customer_name=? and age=? and customer_id=?", c.CustomerName, c.Age, c.CustomerID).
 		Find(&updatedC))
 
 	if tx.RowsAffected < 1 {
