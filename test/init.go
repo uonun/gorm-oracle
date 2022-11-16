@@ -17,6 +17,7 @@ var dsn string
 
 func init() {
 	initDSN()
+	// initDB(&testing.T{})
 }
 
 func initDSN() {
