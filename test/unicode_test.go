@@ -8,7 +8,7 @@ import (
 	go_ora "github.com/sijms/go-ora/v2"
 )
 
-func TestInsertUnicode(t *testing.T) {
+func TestInsertUnicodeRaw(t *testing.T) {
 	db := getDb(t)
 	var customer_name = fmt.Sprintf("TestInsertUnicode:%s", uuid.New().String())
 	value := fmt.Sprintf("unicode:😁🍎$➔®≧①◎◉§❤️🇨🇳:%s", uuid.New().String())
@@ -20,6 +20,21 @@ func TestInsertUnicode(t *testing.T) {
 
 	var newValue string
 	checkTxError(t, db.Raw("SELECT ADDRESS FROM CUSTOMERS WHERE customer_id = :1", newid).Scan(&newValue))
+
+	if string(value) != newValue {
+		t.Errorf("unicode not inserted")
+	}
+}
+
+func TestInsertUnicodeModel(t *testing.T) {
+	c := getRandomCustomerReturning("TestInsertUnicodeModel")
+	value := fmt.Sprintf("unicode:😁🍎$➔®≧①◎◉§❤️🇨🇳:%s", uuid.New().String())
+	c.Address = go_ora.NVarChar(value)
+	db := getDb(t)
+	checkTxError(t, checkTxError(t, db.Create(&c)))
+
+	var newValue string
+	checkTxError(t, db.Raw("SELECT ADDRESS FROM CUSTOMERS WHERE customer_id = :1", c.CustomerID).Scan(&newValue))
 
 	if string(value) != newValue {
 		t.Errorf("unicode not inserted")

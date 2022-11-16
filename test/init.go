@@ -55,7 +55,7 @@ func getDb(t *testing.T) *gorm.DB {
 func getRandomCustomer(name string) Customer {
 	return Customer{
 		CustomerName: fmt.Sprintf("%s:%s", name, uuid.New().String()),
-		Address:      fmt.Sprintf("Address:%s", uuid.New().String()),
+		Address:      go_ora.NVarChar(fmt.Sprintf("Address:%s", uuid.New().String())),
 		City:         fmt.Sprintf("City:%s", uuid.New().String()),
 		State:        fmt.Sprintf("State:%d", rand.Int31()),
 		ZipCode:      fmt.Sprintf("Z:%d", rand.Intn(9999)),
@@ -67,7 +67,7 @@ func getRandomCustomer(name string) Customer {
 func getRandomCustomerReturning(name string) CustomerReturning {
 	return CustomerReturning{
 		CustomerName: fmt.Sprintf("%s:%s", name, uuid.New().String()),
-		Address:      fmt.Sprintf("Address:%s", uuid.New().String()),
+		Address:      go_ora.NVarChar(fmt.Sprintf("Address:%s", uuid.New().String())),
 		City:         fmt.Sprintf("City:%s", uuid.New().String()),
 		State:        fmt.Sprintf("State:%d", rand.Int31()),
 		ZipCode:      fmt.Sprintf("Z:%d", rand.Intn(9999)),
@@ -79,7 +79,7 @@ func getRandomCustomerReturning(name string) CustomerReturning {
 func getRandomCustomerReturningPrimaryKey(name string) CustomerReturningPrimaryKey {
 	return CustomerReturningPrimaryKey{
 		CustomerName: fmt.Sprintf("%s:%s", name, uuid.New().String()),
-		Address:      fmt.Sprintf("Address:%s", uuid.New().String()),
+		Address:      go_ora.NVarChar(fmt.Sprintf("Address:%s", uuid.New().String())),
 		City:         fmt.Sprintf("City:%s", uuid.New().String()),
 		State:        fmt.Sprintf("State:%d", rand.Int31()),
 		ZipCode:      fmt.Sprintf("Z:%d", rand.Intn(9999)),
@@ -91,7 +91,7 @@ func getRandomCustomerReturningPrimaryKey(name string) CustomerReturningPrimaryK
 func getRandomCustomerHook(name string) CustomerHook {
 	return CustomerHook{
 		CustomerName: fmt.Sprintf("%s:%s", name, uuid.New().String()),
-		Address:      fmt.Sprintf("Address:%s", uuid.New().String()),
+		Address:      go_ora.NVarChar(fmt.Sprintf("Address:%s", uuid.New().String())),
 		City:         fmt.Sprintf("City:%s", uuid.New().String()),
 		State:        fmt.Sprintf("State:%d", rand.Int31()),
 		ZipCode:      fmt.Sprintf("Z:%d", rand.Intn(9999)),
