@@ -52,7 +52,19 @@ func getDb(t *testing.T) *gorm.DB {
 	return db.Debug()
 }
 
-func getRandomCustomer(name string) Customer {
+func getCustomerWithSequenceButNotReturning(name string) CustomerWithSequenceButNotReturning {
+	return CustomerWithSequenceButNotReturning{
+		CustomerName: fmt.Sprintf("%s:%s", name, uuid.New().String()),
+		Address:      go_ora.NVarChar(fmt.Sprintf("Address:%s", uuid.New().String())),
+		City:         fmt.Sprintf("City:%s", uuid.New().String()),
+		State:        fmt.Sprintf("State:%d", rand.Int31()),
+		ZipCode:      fmt.Sprintf("Z:%d", rand.Intn(9999)),
+		CreatedTime:  time.Now(),
+		Age:          rand.Int31(),
+	}
+}
+
+func getCustomer(name string) Customer {
 	return Customer{
 		CustomerName: fmt.Sprintf("%s:%s", name, uuid.New().String()),
 		Address:      go_ora.NVarChar(fmt.Sprintf("Address:%s", uuid.New().String())),
@@ -64,8 +76,33 @@ func getRandomCustomer(name string) Customer {
 	}
 }
 
-func getRandomCustomerReturning(name string) CustomerReturning {
-	return CustomerReturning{
+func getCustomerOfUDT(name string) CustomerOfUDT {
+	return CustomerOfUDT{
+		CustomerName: fmt.Sprintf("%s:%s", name, uuid.New().String()),
+		// AddressNClob: &ContentNClob{String: fmt.Sprintf("Address:%s", uuid.New().String())},
+		Address:     &NClobContent{String: go_ora.NClob{String: fmt.Sprintf("Address:%s", uuid.New().String()), Valid: true}},
+		City:        fmt.Sprintf("City:%s", uuid.New().String()),
+		State:       fmt.Sprintf("State:%d", rand.Int31()),
+		ZipCode:     fmt.Sprintf("Z:%d", rand.Intn(9999)),
+		CreatedTime: time.Now(),
+		Age:         rand.Int31(),
+	}
+}
+
+func getCustomerOfNClob(name string) CustomerOfNClob {
+	return CustomerOfNClob{
+		CustomerName: fmt.Sprintf("%s:%s", name, uuid.New().String()),
+		Address:      &go_ora.NClob{String: fmt.Sprintf("Address:%s", uuid.New().String()), Valid: true},
+		City:         fmt.Sprintf("City:%s", uuid.New().String()),
+		State:        fmt.Sprintf("State:%d", rand.Int31()),
+		ZipCode:      fmt.Sprintf("Z:%d", rand.Intn(9999)),
+		CreatedTime:  time.Now(),
+		Age:          rand.Int31(),
+	}
+}
+
+func getCustomerWithPrimaryKey(name string) CustomerWithPrimaryKey {
+	return CustomerWithPrimaryKey{
 		CustomerName: fmt.Sprintf("%s:%s", name, uuid.New().String()),
 		Address:      go_ora.NVarChar(fmt.Sprintf("Address:%s", uuid.New().String())),
 		City:         fmt.Sprintf("City:%s", uuid.New().String()),
@@ -76,20 +113,8 @@ func getRandomCustomerReturning(name string) CustomerReturning {
 	}
 }
 
-func getRandomCustomerReturningPrimaryKey(name string) CustomerReturningPrimaryKey {
-	return CustomerReturningPrimaryKey{
-		CustomerName: fmt.Sprintf("%s:%s", name, uuid.New().String()),
-		Address:      go_ora.NVarChar(fmt.Sprintf("Address:%s", uuid.New().String())),
-		City:         fmt.Sprintf("City:%s", uuid.New().String()),
-		State:        fmt.Sprintf("State:%d", rand.Int31()),
-		ZipCode:      fmt.Sprintf("Z:%d", rand.Intn(9999)),
-		CreatedTime:  time.Now(),
-		Age:          rand.Int31(),
-	}
-}
-
-func getRandomCustomerHook(name string) CustomerHook {
-	return CustomerHook{
+func getCustomerWithHook(name string) CustomerWithHook {
+	return CustomerWithHook{
 		CustomerName: fmt.Sprintf("%s:%s", name, uuid.New().String()),
 		Address:      go_ora.NVarChar(fmt.Sprintf("Address:%s", uuid.New().String())),
 		City:         fmt.Sprintf("City:%s", uuid.New().String()),

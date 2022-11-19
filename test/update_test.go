@@ -22,7 +22,7 @@ func TestUpdateRawExists(t *testing.T) {
 		t.Errorf("there must be 1 row updated.")
 	}
 
-	var updatedC Customer
+	var updatedC CustomerWithSequenceButNotReturning
 	tx = checkTxError(t, db.
 		Where("customer_name=? and customer_id=?", customer_name, c.CustomerID).
 		Find(&updatedC))
@@ -64,7 +64,7 @@ func TestUpdateModel(t *testing.T) {
 		t.Errorf("there must be 1 row updated.")
 	}
 
-	var updatedC Customer
+	var updatedC CustomerWithSequenceButNotReturning
 	tx = checkTxError(t, db.
 		Where("customer_name=? and age=? and customer_id=?", c.CustomerName, c.Age, c.CustomerID).
 		Find(&updatedC))
@@ -84,9 +84,9 @@ func TestUpdateModels(t *testing.T) {
 	// create N rows
 	count := 4
 	batchId := uuid.NewString()
-	cs := make([]CustomerReturning, count)
+	cs := make([]Customer, count)
 	for i := 0; i < count; i++ {
-		cs[i] = getRandomCustomerReturning(fmt.Sprintf("TestUpdateModels:batch-%s:", batchId))
+		cs[i] = getCustomer(fmt.Sprintf("TestUpdateModels:batch-%s:", batchId))
 	}
 
 	db := getDb(t)
@@ -100,12 +100,12 @@ func TestUpdateModels(t *testing.T) {
 		ids[i] = cs[i].CustomerID
 	}
 
-	tx2 := checkTxError(t, db.Where("customer_id IN ?", ids).Updates(Customer{State: newState, CreatedTime: newTime}))
+	tx2 := checkTxError(t, db.Where("customer_id IN ?", ids).Updates(CustomerWithSequenceButNotReturning{State: newState, CreatedTime: newTime}))
 	if tx2.RowsAffected != int64(count) {
 		t.Errorf("there must be %d rows updated.", count)
 	}
 
-	var updatedCs []Customer
+	var updatedCs []CustomerWithSequenceButNotReturning
 	tx3 := checkTxError(t, db.Where("state=? and created_time=?", newState, newTime).Find(&updatedCs))
 	if tx3.RowsAffected != int64(count) || len(updatedCs) != count {
 		t.Errorf("there must be %d rows found after updated.", count)
@@ -128,8 +128,8 @@ func TestUpdateModels(t *testing.T) {
 }
 
 // createOne create a row to be updated.
-func createOne(t *testing.T) (CustomerReturningPrimaryKey, *gorm.DB) {
-	c := getRandomCustomerReturningPrimaryKey("createForUpdateTesting")
+func createOne(t *testing.T) (CustomerWithPrimaryKey, *gorm.DB) {
+	c := getCustomerWithPrimaryKey("createForUpdateTesting")
 	db := getDb(t)
 	checkTxError(t, db.Create(&c))
 	return c, db

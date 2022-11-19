@@ -17,7 +17,7 @@ func TestDelelteModel(t *testing.T) {
 		db.Exec(
 			`INSERT INTO CUSTOMERS (customer_id,customer_name) VALUES (customers_s.nextval,:1) RETURNING customer_id INTO :2`, customer_name, &newid))
 
-	c := Customer{CustomerID: newid}
+	c := CustomerWithSequenceButNotReturning{CustomerID: newid}
 
 	ret := checkTxError(t, db.Where("customer_id = ? ", c.CustomerID).Delete(&c))
 	if ret.RowsAffected != 1 {

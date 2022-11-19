@@ -19,7 +19,7 @@ func TestQueryRawCount(t *testing.T) {
 func TestQueryRawModel(t *testing.T) {
 	db := getDb(t)
 
-	var row = Customer{}
+	var row = CustomerWithSequenceButNotReturning{}
 	checkTxError(t, db.Raw("SELECT customer_id,customer_name FROM CUSTOMERS").Scan(&row))
 
 	if row.CustomerID == 0 {
@@ -30,7 +30,7 @@ func TestQueryRawModel(t *testing.T) {
 func TestQueryModel(t *testing.T) {
 	db := getDb(t)
 
-	var row Customer
+	var row CustomerWithSequenceButNotReturning
 	checkTxError(t, db.Find(&row))
 
 	if row.CustomerID == 0 {
