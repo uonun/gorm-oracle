@@ -59,8 +59,6 @@ type Config struct {
 	DontSupportRenameColumn bool
 	// DontSupportForShareClause     bool
 	DontSupportNullAsDefaultValue bool
-
-	DontPingWhenInitConn bool
 }
 
 var (
@@ -107,26 +105,28 @@ func (dialector Dialector) Initialize(db *gorm.DB) (err error) {
 		dialector.DriverName = dialectorName
 	}
 
+	// if dialector.Conn != nil {
+	// 	if !dialector.Config.DontPingWhenInitConn {
+	// 		if pinger, ok := dialector.Conn.(interface{ Ping() error }); ok {
+	// 			err = pinger.Ping()
+	// 		}
+	// 		// 避免在 gorm.Open 里再 ping 一次
+	// 		db.Config.DisableAutomaticPing = true
+	// 	}
+
+	// 	if err == nil {
+	// 		db.ConnPool = dialector.Conn
+	// 	} else {
+	// 		if db.Config.Logger != nil {
+	// 			db.Config.Logger.Info(context.Background(),
+	// 				"ping failed, broken conn found, will reopen it with sql.Open: %s", err)
+	// 		}
+	// 	}
+	// }
+
 	if dialector.Conn != nil {
-		if !dialector.Config.DontPingWhenInitConn {
-			if pinger, ok := dialector.Conn.(interface{ Ping() error }); ok {
-				err = pinger.Ping()
-			}
-			// 避免在 gorm.Open 里再 ping 一次
-			db.Config.DisableAutomaticPing = true
-		}
-
-		if err == nil {
-			db.ConnPool = dialector.Conn
-		} else {
-			if db.Config.Logger != nil {
-				db.Config.Logger.Info(context.Background(),
-					"ping failed, broken conn found, will reopen it with sql.Open: %s", err)
-			}
-		}
-	}
-
-	if dialector.Conn == nil {
+		db.ConnPool = dialector.Conn
+	} else {
 		db.ConnPool, err = sql.Open(dialector.DriverName, dialector.DSN)
 		if err != nil {
 			return errors.Wrapf(err, "sql.Open failed")

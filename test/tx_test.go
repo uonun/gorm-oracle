@@ -34,12 +34,12 @@ func TestTxInsertRaw(t *testing.T) {
 	checkTxError(t, db.Exec(sql, vals2...))
 
 	// query, there must be 2 rows found.
-	var row1 Customer
+	var row1 CustomerWithSequenceButNotReturning
 	row1ret := checkTxError(t, db.Where("CUSTOMER_NAME = ? ", customer_name1).Find(&row1))
 	if row1ret.RowsAffected != 1 || row1.CustomerName != customer_name1 {
 		t.Fatalf("TestTxInsertRaw: can not query inserted row-customer_name1 in tx")
 	}
-	var row2 Customer
+	var row2 CustomerWithSequenceButNotReturning
 	row2ret := checkTxError(t, db.Where("CUSTOMER_NAME = ? ", customer_name2).Find(&row2))
 	if row2ret.RowsAffected != 1 || row2.CustomerName != customer_name2 {
 		t.Fatalf("TestTxInsertRaw: can not query inserted row-customer_name2 in tx")
@@ -52,7 +52,7 @@ func TestTxInsertRaw(t *testing.T) {
 	db.Commit()
 
 	newdb := getDb(t)
-	var commitedRow Customer
+	var commitedRow CustomerWithSequenceButNotReturning
 	// query again. must be 1 row only
 	newdbret := checkTxError(t, newdb.Where("CUSTOMER_NAME = ? or CUSTOMER_NAME = ? ", customer_name1, customer_name2).Find(&commitedRow))
 	if newdbret.RowsAffected != 1 || commitedRow.CustomerName != customer_name1 {
