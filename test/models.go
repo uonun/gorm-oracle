@@ -9,6 +9,11 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+type CustomerModel interface {
+	CustomerWithSequenceButNotReturning | Customer | CustomerOfNClob | CustomerOfUDT | CustomerWithPrimaryKey | CustomerWithHook
+	GetCustomerID() int64
+}
+
 ///------Generate sequence(autoIncrement value)----------------------------------------------------------------
 // CustomerWithSequenceButNotReturning table comment
 // - use `sequence` to specify the sequence name.
@@ -52,6 +57,10 @@ func (c *Customer) TableName() string {
 	return "Customers"
 }
 
+func (c Customer) GetCustomerID() int64 {
+	return c.CustomerID
+}
+
 ///--------go_ora.NVarChar/go_ora.NClob for NCLOB columns--------------------------------------------------------
 // CustomerOfNClob table comment
 // use `type` for go_ora.NClob
@@ -70,6 +79,10 @@ type CustomerOfNClob struct {
 // TableName sets the insert table name for this struct type
 func (c *CustomerOfNClob) TableName() string {
 	return "Customers"
+}
+
+func (c CustomerOfNClob) GetCustomerID() int64 {
+	return c.CustomerID
 }
 
 ///----------------------------------------------------------------------

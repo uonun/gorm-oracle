@@ -46,34 +46,70 @@ func TestInsertUnicodeModel(t *testing.T) {
 
 	cNVarChar.Address = go_ora.NVarChar(value)
 	cNClob.Address = &go_ora.NClob{String: value, Valid: true}
-	insertWithCheck_NVarCharModel(t, db, value, cNVarChar)
-	insertWithCheck_NClobModel(t, db, value, cNClob)
+	insertWithCheck_Model(t, db, value, cNVarChar)
+	insertWithCheck_Model(t, db, value, cNClob)
 
 	// make sure more than 4k bytes.
 	value = strings.Repeat(value, 100)
+	cNVarChar.CustomerID = 0
+	cNClob.CustomerID = 0
 	cNVarChar.Address = go_ora.NVarChar(value)
 	cNClob.Address = &go_ora.NClob{String: value, Valid: true}
-	insertWithCheck_NVarCharModel(t, db, value, cNVarChar)
-	insertWithCheck_NClobModel(t, db, value, cNClob)
+	insertWithCheck_Model(t, db, value, cNVarChar)
+	insertWithCheck_Model(t, db, value, cNClob)
 }
 
-func insertWithCheck_NVarCharModel(t *testing.T, db *gorm.DB, value string, c Customer) {
+func insertWithCheck_Model[T CustomerModel](t *testing.T, db *gorm.DB, value string, c T) {
 	checkTxError(t, checkTxError(t, db.Create(&c)))
 
 	var newValue string
-	checkTxError(t, db.Raw("SELECT ADDRESS FROM CUSTOMERS WHERE customer_id = :1", c.CustomerID).Scan(&newValue))
+	checkTxError(t, db.Raw("SELECT ADDRESS FROM CUSTOMERS WHERE customer_id = :1", c.GetCustomerID()).Scan(&newValue))
 
 	if string(value) != newValue {
 		t.Errorf("unicode not inserted")
 	}
 }
-func insertWithCheck_NClobModel(t *testing.T, db *gorm.DB, value string, c CustomerOfNClob) {
-	checkTxError(t, checkTxError(t, db.Create(&c)))
 
-	var newValue string
-	checkTxError(t, db.Raw("SELECT ADDRESS FROM CUSTOMERS WHERE customer_id = :1", c.CustomerID).Scan(&newValue))
+func TestInsertUnicodeModels(t *testing.T) {
+	db := getDb(t)
+	value := "😁🍎🇨🇳㊣①❷㏾罗🀄︎🌈🔥"
+	count := 10
+	cNVarChars := make([]Customer, count)
+	cNClobs := make([]CustomerOfNClob, count)
 
-	if string(value) != newValue {
-		t.Errorf("unicode not inserted")
+	for i := 0; i < count; i++ {
+		cNVarChars[i] = getCustomer("TestInsertUnicodeModels")
+		cNVarChars[i].Address = go_ora.NVarChar(value)
+	}
+	for i := 0; i < count; i++ {
+		cNClobs[i] = getCustomerOfNClob("TestInsertUnicodeModel")
+		cNClobs[i].Address = &go_ora.NClob{String: value, Valid: true}
+	}
+
+	insertWithCheck_Models(t, db, value, cNVarChars)
+	insertWithCheck_Models(t, db, value, cNClobs)
+
+	// make sure more than 4k bytes.
+	value = strings.Repeat(value, 100)
+	for i := 0; i < count; i++ {
+		cNVarChars[i].CustomerID = 0
+		cNClobs[i].CustomerID = 0
+		cNVarChars[i].Address = go_ora.NVarChar(value)
+		cNClobs[i].Address = &go_ora.NClob{String: value, Valid: true}
+	}
+	insertWithCheck_Models(t, db, value, cNVarChars)
+	insertWithCheck_Models(t, db, value, cNClobs)
+}
+
+func insertWithCheck_Models[T CustomerModel](t *testing.T, db *gorm.DB, value string, cs []T) {
+	checkTxError(t, checkTxError(t, db.Create(&cs)))
+
+	for _, c := range cs {
+		var newValue string
+		checkTxError(t, db.Raw("SELECT ADDRESS FROM CUSTOMERS WHERE customer_id = :1", c.GetCustomerID()).Scan(&newValue))
+
+		if string(value) != newValue {
+			t.Fatalf("unicode not inserted")
+		}
 	}
 }
