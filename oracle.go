@@ -9,9 +9,10 @@ import (
 
 	"github.com/pkg/errors"
 	_ "github.com/sijms/go-ora/v2"
+	"github.com/uonun/gorm-oracle/callbacks"
 
 	"gorm.io/gorm"
-	"gorm.io/gorm/callbacks"
+	cbs "gorm.io/gorm/callbacks"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 	"gorm.io/gorm/migrator"
@@ -48,7 +49,7 @@ type Config struct {
 
 	InitializeWithVersion bool
 
-	// DontSupportIdentity 为 ture 时表明不支持 IDENTITY 关键字
+	// SupportIdentity 为 true 时支持 IDENTITY 关键字
 	// See: https://docs.oracle.com/database/121/DRDAA/migr_tools_feat.htm#DRDAA109
 	SupportIdentity bool
 
@@ -64,14 +65,8 @@ type Config struct {
 var (
 	// CreateClauses create clauses
 	CreateClauses = []string{"INSERT", "VALUES", "ON CONFLICT", "RETURNING"}
-	// QueryClauses query clauses
-	QueryClauses = []string{}
-	// UpdateClauses update clauses
-	UpdateClauses = []string{"UPDATE", "SET", "WHERE", "ORDER BY", "LIMIT"}
-	// DeleteClauses delete clauses
-	DeleteClauses = []string{"DELETE", "FROM", "WHERE", "ORDER BY", "LIMIT"}
 
-	// defaultDatetimePrecision = 3
+	supportReturning bool
 )
 
 type Dialector struct {
@@ -94,35 +89,16 @@ func (dialector Dialector) Initialize(db *gorm.DB) (err error) {
 	ctx := context.Background()
 
 	// register callbacks
-	callbacks.RegisterDefaultCallbacks(db, &callbacks.Config{
+	cbsCfg := &cbs.Config{
 		CreateClauses: CreateClauses,
-		QueryClauses:  QueryClauses,
-		UpdateClauses: UpdateClauses,
-		DeleteClauses: DeleteClauses,
-	})
+	}
+	supportReturning = utils.Contains(CreateClauses, "RETURNING")
+
+	cbs.RegisterDefaultCallbacks(db, cbsCfg)
 
 	if dialector.DriverName == "" {
 		dialector.DriverName = dialectorName
 	}
-
-	// if dialector.Conn != nil {
-	// 	if !dialector.Config.DontPingWhenInitConn {
-	// 		if pinger, ok := dialector.Conn.(interface{ Ping() error }); ok {
-	// 			err = pinger.Ping()
-	// 		}
-	// 		// 避免在 gorm.Open 里再 ping 一次
-	// 		db.Config.DisableAutomaticPing = true
-	// 	}
-
-	// 	if err == nil {
-	// 		db.ConnPool = dialector.Conn
-	// 	} else {
-	// 		if db.Config.Logger != nil {
-	// 			db.Config.Logger.Info(context.Background(),
-	// 				"ping failed, broken conn found, will reopen it with sql.Open: %s", err)
-	// 		}
-	// 	}
-	// }
 
 	if dialector.Conn != nil {
 		db.ConnPool = dialector.Conn
@@ -146,6 +122,10 @@ func (dialector Dialector) Initialize(db *gorm.DB) (err error) {
 			strings.Contains(dialector.ServerVersion, "21c") {
 			dialector.Config.SupportIdentity = true
 		}
+	}
+
+	if err = db.Callback().Create().Replace("gorm:create", callbacks.Create(cbsCfg)); err != nil {
+		return
 	}
 
 	for k, v := range dialector.ClauseBuilders() {
@@ -480,7 +460,7 @@ func (dialector Dialector) DefaultValueOf(field *schema.Field) clause.Expression
 func (dialector Dialector) AddSequenceColumn(stmt *gorm.Statement, values clause.Values) clause.Values {
 	dbNameCount := len(stmt.Schema.DBNames)
 
-	isExists := func(cols []clause.Column, colName string) bool {
+	isColumnExists := func(cols []clause.Column, colName string) bool {
 		if cols != nil {
 			for i := 0; i < len(cols); i++ {
 				if cols[i].Name == colName {
@@ -512,7 +492,7 @@ func (dialector Dialector) AddSequenceColumn(stmt *gorm.Statement, values clause
 			//		need to insert/append the column & value.
 			//  case 2: db.Clauses(clause.Returning{Columns: []clause.Column{{Name: "CUSTOMER_ID"},},})
 			// 		need to overwrite the exists value.
-			exists := isExists(values.Columns, db)
+			exists := isColumnExists(values.Columns, db)
 			// insert at index i
 			if i < len(values.Columns) {
 				if !exists {
@@ -583,7 +563,7 @@ func (dialector Dialector) BindVarParameter(stmt *gorm.Statement) string {
 
 		isBatchInsert, ok := stmt.Context.Value(ctxKeyIsBatchInsert).(bool)
 		if ok && isBatchInsert {
-			if isReturning, _ := hasReturning(stmt); !isReturning {
+			if isReturning, _ := callbacks.HasReturning(stmt.DB, supportReturning); !isReturning {
 				// BUILDING SQL: INSERT INTO ...
 				// placeholder for sequence column
 				return "NULL"
@@ -595,7 +575,7 @@ func (dialector Dialector) BindVarParameter(stmt *gorm.Statement) string {
 	} else {
 		isBatchInsert, ok := stmt.Context.Value(ctxKeyIsBatchInsert).(bool)
 		if ok && isBatchInsert {
-			if isReturning, _ := hasReturning(stmt); !isReturning {
+			if isReturning, _ := callbacks.HasReturning(stmt.DB, supportReturning); !isReturning {
 				// BUILDING SQL: INSERT INTO ...
 				return fmt.Sprintf(":p%d_%d AS %s", valueIndex, fieldIndex, field.Name)
 			}
