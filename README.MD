@@ -14,21 +14,31 @@ import (
 )
 
 func main(){
+  // build DSN, see: https://github.com/sijms/go-ora
+  //  CONN=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=***)(PORT=***))(CONNECT_DATA=(SERVER=DEDICATED)(SERVICE_NAME=***)))
+  //  USER= ""
+  //  PASSWORD = ""
+  
   // prepare connection options
   urlOptions := map[string]string{
     "CONNECTION TIMEOUT": "3",
   }
-  // build DSN
-  // CONN=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=***)(PORT=***))(CONNECT_DATA=(SERVER=DEDICATED)(SERVICE_NAME=***)))
-  // USER= ""
-  // PASSWORD = ""
+  
   // oracle://{USER}:{PASSWORD}@:0/?CONNECTION TIMEOUT=3&connStr=CONN_TNS
   dsn = go_ora.BuildJDBC(os.Getenv("USER"), 
     os.Getenv("PASSWORD"), 
     os.Getenv("CONN"), urlOptions)
 
-  // create orm and open connection
+  // create with default configuration
+  // or create use customer configuration
+  // both will be overwritten by Environment variables
   dialector := oracle.Open(dsn)
+  // dialector = oracle.New(oracle.Config{
+  //   DSN: dsn,
+  //   SkipInitializeWithVersion: true,
+  //   // DefaultStringSize: ,
+  // })
+
   db, err := gorm.Open(dialector, &gorm.Config{})
 
   // use `db` same as gorm

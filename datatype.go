@@ -64,7 +64,7 @@ func (dialector Dialector) getSchemaIntAndUnitType(field *schema.Field) string {
 	}
 
 	// TODO: test
-	if field.AutoIncrement && dialector.Config.SupportIdentity {
+	if field.AutoIncrement && dialector.Config.supportIdentity {
 		sqlType += " GENERATED ALWAYS as IDENTITY(START with 1 INCREMENT by 1)"
 	}
 

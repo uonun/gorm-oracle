@@ -289,7 +289,7 @@ func (d Dialector) HandleInsert(c clause.Clause, builder clause.Builder) {
 }
 
 func (d Dialector) HandleLimit(c clause.Clause, builder clause.Builder) {
-	if !d.Config.SupportOffsetFetch {
+	if !d.Config.supportOffsetFetch {
 		c.Build(builder)
 		return
 	}
