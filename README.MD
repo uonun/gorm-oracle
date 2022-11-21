@@ -1,4 +1,13 @@
-# 用于 GORM 的 Oracle 驱动
+# GORM-ORACLE
+
+用于 GORM 的 Oracle 驱动。
+
+[![Go Report Card](https://goreportcard.com/badge/github.com/uonun/gorm-oracle)](https://goreportcard.com/report/github.com/uonun/gorm-oracle)
+[![Go](https://github.com/uonun/gorm-oracle/actions/workflows/go.yml/badge.svg)](https://github.com/uonun/gorm-oracle/actions/workflows/go.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/uonun/gorm-oracle.svg)](https://pkg.go.dev/github.com/uonun/gorm-oracle)
+[![MIT license](https://img.shields.io/badge/license-MIT-brightgreen.svg)](https://opensource.org/licenses/MIT)
+
+
 
 ## 使用指引
 
