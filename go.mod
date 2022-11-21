@@ -14,4 +14,4 @@ require (
 	github.com/jinzhu/now v1.1.4 // indirect
 )
 
-replace github.com/sijms/go-ora/v2 => ../go-ora/v2
+// replace github.com/sijms/go-ora/v2 => ../go-ora/v2
