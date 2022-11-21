@@ -48,14 +48,14 @@ func TestTxInsertRaw(t *testing.T) {
 	// rollback
 	db.RollbackTo("point1")
 
-	// customer_name2 commited.
+	// customer_name2 committed.
 	db.Commit()
 
 	newdb := getDb(t)
-	var commitedRow CustomerWithSequenceButNotReturning
+	var committedRow CustomerWithSequenceButNotReturning
 	// query again. must be 1 row only
-	newdbret := checkTxError(t, newdb.Where("CUSTOMER_NAME = ? or CUSTOMER_NAME = ? ", customer_name1, customer_name2).Find(&commitedRow))
-	if newdbret.RowsAffected != 1 || commitedRow.CustomerName != customer_name1 {
+	newdbret := checkTxError(t, newdb.Where("CUSTOMER_NAME = ? or CUSTOMER_NAME = ? ", customer_name1, customer_name2).Find(&committedRow))
+	if newdbret.RowsAffected != 1 || committedRow.CustomerName != customer_name1 {
 		t.Fatalf("TestTxInsertRaw: 2 row inserted after rollback")
 	}
 
