@@ -7,17 +7,16 @@ import (
 )
 
 type Config struct {
-	DriverName string
-	DSN        string
+	DriverName    string
+	DSN           string
+	ServerVersion string
+	Conn          gorm.ConnPool
 
 	SkipInitializeWithVersion     bool
 	DefaultStringSize             uint
 	DontSupportRenameIndex        bool
 	DontSupportRenameColumn       bool
 	DontSupportNullAsDefaultValue bool
-
-	serverVersion string
-	connPool      gorm.ConnPool
 
 	// DontSupportIdentity 为 true 时表明不支持 IDENTITY 关键字
 	// See: https://docs.oracle.com/database/121/DRDAA/migr_tools_feat.htm#DRDAA109

@@ -65,8 +65,8 @@ func (dialector Dialector) Initialize(db *gorm.DB) (err error) {
 		dialector.DriverName = dialectorName
 	}
 
-	if dialector.connPool != nil {
-		db.ConnPool = dialector.connPool
+	if dialector.Conn != nil {
+		db.ConnPool = dialector.Conn
 	} else {
 		db.ConnPool, err = sql.Open(dialector.DriverName, dialector.DSN)
 		if err != nil {
@@ -75,17 +75,17 @@ func (dialector Dialector) Initialize(db *gorm.DB) (err error) {
 	}
 
 	if !dialector.Config.SkipInitializeWithVersion {
-		err = db.ConnPool.QueryRowContext(ctx, "SELECT * FROM v$version	WHERE banner LIKE 'Oracle%'").Scan(&dialector.serverVersion)
+		err = db.ConnPool.QueryRowContext(ctx, "SELECT * FROM v$version	WHERE banner LIKE 'Oracle%'").Scan(&dialector.ServerVersion)
 		if err != nil {
 			return errors.Wrapf(err, "db.ConnPool.QueryRowContext failed")
 		}
 
 		// https://en.wikipedia.org/wiki/Oracle_Database
 		// TEST：tested: Oracle Database 11g Enterprise Edition Release 11.2.0.4.0 - 64bit Production
-		if strings.Contains(dialector.serverVersion, "12c") ||
-			strings.Contains(dialector.serverVersion, "18c") ||
-			strings.Contains(dialector.serverVersion, "19c") ||
-			strings.Contains(dialector.serverVersion, "21c") {
+		if strings.Contains(dialector.ServerVersion, "12c") ||
+			strings.Contains(dialector.ServerVersion, "18c") ||
+			strings.Contains(dialector.ServerVersion, "19c") ||
+			strings.Contains(dialector.ServerVersion, "21c") {
 			dialector.Config.supportIdentity = true
 			dialector.Config.supportOffsetFetch = true
 		}
